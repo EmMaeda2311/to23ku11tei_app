@@ -1,381 +1,432 @@
-// js/main.js
+'use strict';
 
-// 1. データ構造
-let appData = {
-    questions: []
+const STORAGE_KEY = 'myQuizData';
+const DEFAULT_LEARNING_STATE = Object.freeze({
+    repetitionCount: 0,
+    easeFactor: 2.5,
+    intervalDays: 0,
+    nextReviewDate: null,
+});
+
+const appState = {
+    data: { questions: [] },
+    queues: {
+        current: [],
+        normalDue: [],
+        wrongDue: [],
+    },
+    currentQuestion: null,
+    selectedOptions: [],
 };
 
-// 2. アプリの状態管理
-let currentQuizQueue = [];
-let normalDueQueue = [];
-let wrongDueQueue = [];
-let currentQuestion = null;
-let currentSelectedOptions = [];
+const elements = {};
 
-// --- 初期化とローカルストレージ処理 ---
+document.addEventListener('DOMContentLoaded', init);
+
 function init() {
+    cacheElements();
+    bindEvents();
     loadDataFromLocal();
     updateDashboard();
 }
 
+function cacheElements() {
+    Object.assign(elements, {
+        views: document.querySelectorAll('.view'),
+        dashboardView: document.getElementById('dashboard-view'),
+        quizView: document.getElementById('quiz-view'),
+        resultView: document.getElementById('result-view'),
+        statAttempted: document.getElementById('stat-attempted'),
+        statDue: document.getElementById('stat-due'),
+        statWrong: document.getElementById('stat-wrong'),
+        csvUpload: document.getElementById('csv-upload'),
+        questionText: document.getElementById('question-text'),
+        questionImage: document.getElementById('question-image'),
+        optionsContainer: document.getElementById('options-container'),
+        resultTitle: document.getElementById('result-title'),
+        resultQuestionText: document.getElementById('result-question-text'),
+        explanationText: document.getElementById('explanation-text'),
+        explanationImage: document.getElementById('explanation-image'),
+        correctActions: document.getElementById('correct-actions'),
+        wrongActions: document.getElementById('wrong-actions'),
+    });
+}
+
+function bindEvents() {
+    document.querySelector('[data-action="start-normal"]').addEventListener('click', () => startQuiz('normal'));
+    document.querySelector('[data-action="start-wrong"]').addEventListener('click', () => startQuiz('wrong'));
+
+    elements.csvUpload.addEventListener('change', handleCSVUpload);
+
+    document.querySelectorAll('[data-quality]').forEach((button) => {
+        button.addEventListener('click', () => processSM2(Number(button.dataset.quality)));
+    });
+}
+
 function loadDataFromLocal() {
-    const savedData = localStorage.getItem('myQuizData');
-    if (savedData) {
-        appData = JSON.parse(savedData);
+    const savedData = localStorage.getItem(STORAGE_KEY);
+    if (!savedData) return;
+
+    try {
+        const parsedData = JSON.parse(savedData);
+        appState.data = normalizeAppData(parsedData);
+    } catch (error) {
+        console.error('保存データの読み込みに失敗しました。', error);
+        appState.data = { questions: [] };
     }
 }
 
-function saveDataToLocal() {
-    localStorage.setItem('myQuizData', JSON.stringify(appData));
+function normalizeAppData(data) {
+    if (!data || !Array.isArray(data.questions)) {
+        return { questions: [] };
+    }
+
+    return {
+        questions: data.questions.map((question) => ({
+            ...DEFAULT_LEARNING_STATE,
+            ...question,
+            correctAnswers: Array.isArray(question.correctAnswers) ? question.correctAnswers : [],
+            options: Array.isArray(question.options) ? question.options : [],
+        })),
+    };
 }
 
-// ---------------------------------------------------
-// 3. CSVファイルのアップロード・マージ処理（修正版）
-// ---------------------------------------------------
+function saveDataToLocal() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(appState.data));
+}
+
 function handleCSVUpload(event) {
-    const file = event.target.files[0];
+    const [file] = event.target.files;
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = function(e) {
-        const csvText = e.target.result;
-        importCSVAndMerge(csvText);
+    reader.onload = (loadEvent) => {
+        const result = importCSVAndMerge(loadEvent.target.result);
         event.target.value = '';
+        alert(`CSVの読み込みが完了しました！\n・新規追加: ${result.addedCount}問\n・更新: ${result.updatedCount}問`);
     };
+    reader.onerror = () => alert('CSVファイルの読み込みに失敗しました。');
     reader.readAsText(file, 'UTF-8');
 }
 
 function importCSVAndMerge(csvText) {
-    const lines = csvText.replace(/\r\n|\r/g, '\n').trim().split('\n');
-    const dataLines = lines.slice(1);
+    const rows = parseCSV(csvText);
+    const dataRows = rows.slice(1);
     let addedCount = 0;
     let updatedCount = 0;
 
-    // ▼▼ 追加：先頭の「Q〇.」や「〇.」を削除する便利関数 ▼▼
-    // ※全角スペースや「、」区切りなどの表記揺れにも対応しています
-    const cleanQuestion = (text) => text.replace(/^Q\d+[\.、\s　]*/, '').trim();
-    const cleanOption = (text) => text.replace(/^\d+[\.、\s　]*/, '').trim();
+    dataRows.forEach((columns) => {
+        const question = createQuestionFromCSVRow(columns);
+        if (!question) return;
 
-    dataLines.forEach(line => {
-        if (!line.trim()) return;
+        const existingQuestion = appState.data.questions.find((item) => item.id === question.id);
 
-        const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(col => {
-            return col.replace(/^"(.*)"$/, '$1').trim();
-        });
-
-        const id = cols[0];
-        // ▼ 変更：問題文を綺麗にしてから取得
-        const questionText = cleanQuestion(cols[1]);
-        const correctStr = cols[2];
-
-        // ▼ 変更：選択肢も綺麗にしてから取得
-        const options = [cols[3], cols[4], cols[5], cols[6], cols[7]]
-            .filter(opt => opt && opt.trim() !== '')
-            .map(opt => cleanOption(opt));
-
-        const explanation = cols[9];
-        const qImage = cols[10] ? cols[10] : null;
-        const eImage = cols[11] ? cols[11] : null;
-
-        if (!id) return;
-
-        // ▼ 変更：正解テキストを作成する際も綺麗にしておく（照合エラーを防ぐため）
-        const correctIndexes = correctStr.split(',');
-        const correctAnswers = correctIndexes.map(idx => {
-            const num = parseInt(idx.trim());
-            return cols[2 + num] ? cleanOption(cols[2 + num]) : '';
-        }).filter(ans => ans !== '');
-
-        const existingIndex = appData.questions.findIndex(q => q.id === id);
-
-        const questionObj = {
-            id: id,
-            question: questionText,
-            correctAnswers: correctAnswers,
-            options: options,
-            explanation: explanation,
-            questionImage: qImage,
-            explanationImage: eImage
-        };
-
-        if (existingIndex !== -1) {
-            Object.assign(appData.questions[existingIndex], questionObj);
-            updatedCount++;
+        if (existingQuestion) {
+            Object.assign(existingQuestion, question);
+            updatedCount += 1;
         } else {
-            appData.questions.push({
-                ...questionObj,
-                repetitionCount: 0,
-                easeFactor: 2.5,
-                intervalDays: 0,
-                nextReviewDate: null
+            appState.data.questions.push({
+                ...question,
+                ...DEFAULT_LEARNING_STATE,
             });
-            addedCount++;
+            addedCount += 1;
         }
     });
 
     saveDataToLocal();
     updateDashboard();
-    alert(`CSVの読み込みが完了しました！\n・新規追加: ${addedCount}問\n・更新: ${updatedCount}問`);
+
+    return { addedCount, updatedCount };
 }
 
-// ---------------------------------------------------
-// 4. 画面切り替えとユーティリティ
-// ---------------------------------------------------
+function parseCSV(csvText) {
+    return csvText
+        .replace(/^\uFEFF/, '')
+        .replace(/\r\n|\r/g, '\n')
+        .trim()
+        .split('\n')
+        .filter((line) => line.trim() !== '')
+        .map(splitCSVLine);
+}
+
+function splitCSVLine(line) {
+    return line
+        .split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/)
+        .map((column) => column.replace(/^"(.*)"$/, '$1').replace(/""/g, '"').trim());
+}
+
+function createQuestionFromCSVRow(columns) {
+    const id = columns[0]?.trim();
+    const correctIndexText = columns[2] ?? '';
+    if (!id || !correctIndexText) return null;
+
+    const rawOptions = columns.slice(3, 8);
+    const options = rawOptions.filter(Boolean).map(cleanOptionText);
+    const correctAnswers = correctIndexText
+        .split(',')
+        .map((indexText) => Number.parseInt(indexText.trim(), 10))
+        .filter((index) => Number.isInteger(index))
+        .map((index) => rawOptions[index - 1])
+        .filter(Boolean)
+        .map(cleanOptionText);
+
+    return {
+        id,
+        question: cleanQuestionText(columns[1] ?? ''),
+        correctAnswers,
+        options,
+        explanation: columns[9] ?? '',
+        questionImage: columns[10] || null,
+        explanationImage: columns[11] || null,
+    };
+}
+
+function cleanQuestionText(text) {
+    return text.replace(/^Q\d+[\.、\s　]*/, '').trim();
+}
+
+function cleanOptionText(text) {
+    return text.replace(/^\d+[\.、\s　]*/, '').trim();
+}
+
 function showView(viewId) {
-    document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
-    document.getElementById(viewId).classList.add('active');
+    elements.views.forEach((view) => view.classList.remove('active'));
+    document.getElementById(viewId)?.classList.add('active');
 }
 
 function shuffleArray(array) {
-    const arr = [...array];
-    for (let i = arr.length - 1; i > 0; i--) {
+    const result = [...array];
+    for (let i = result.length - 1; i > 0; i -= 1) {
         const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
+        [result[i], result[j]] = [result[j], result[i]];
     }
-    return arr;
+    return result;
 }
 
-// ---------------------------------------------------
-// 5. UI制御（修正版）
-// ---------------------------------------------------
 function updateDashboard() {
-    const total = appData.questions.length;
-    const attempted = appData.questions.filter(q => q.nextReviewDate !== null).length;
-    document.getElementById('stat-attempted').innerText = total > 0 ? Math.round((attempted / total) * 100) : 0;
+    const questions = appState.data.questions;
+    const total = questions.length;
+    const attempted = questions.filter((question) => question.nextReviewDate !== null).length;
+    const now = Date.now();
 
-    const now = new Date().getTime();
+    appState.queues.wrongDue = questions.filter(isWrongQuestion);
+    appState.queues.normalDue = questions.filter((question) => isNormalDueQuestion(question, now));
 
-    // 【抽出1】間違えた問題（1度でも解いたことがあり、連続正解が0回のもの）
-    wrongDueQueue = appData.questions.filter(q =>
-        q.nextReviewDate !== null && q.repetitionCount === 0
-    );
-
-    // 【抽出2】新規・復習タスク（未学習、または復習タイミングが来ていて、正解記録があるもの）
-    normalDueQueue = appData.questions.filter(q =>
-        (q.nextReviewDate === null) ||
-        (q.nextReviewDate <= now && q.repetitionCount > 0)
-    );
-
-    document.getElementById('stat-due').innerText = normalDueQueue.length;
-    document.getElementById('stat-wrong').innerText = wrongDueQueue.length;
+    elements.statAttempted.textContent = total > 0 ? Math.round((attempted / total) * 100) : 0;
+    elements.statDue.textContent = appState.queues.normalDue.length;
+    elements.statWrong.textContent = appState.queues.wrongDue.length;
 }
 
-// ▼▼ 変更：押されたボタンによって読み込むリストを変える ▼▼
+function isWrongQuestion(question) {
+    return question.nextReviewDate !== null && question.repetitionCount === 0;
+}
+
+function isNormalDueQuestion(question, now) {
+    return question.nextReviewDate === null || (question.nextReviewDate <= now && question.repetitionCount > 0);
+}
+
 function startQuiz(mode) {
-    if (mode === 'normal') {
-        if (normalDueQueue.length === 0) {
-            alert("今日の新規・復習タスクは完了しています！");
-            return;
-        }
-        // ▼ 変更：リストをそのまま入れるのではなく、シャッフルして入れる
-        currentQuizQueue = shuffleArray([...normalDueQueue]);
-    } else if (mode === 'wrong') {
-        if (wrongDueQueue.length === 0) {
-            alert("現在、要注意（間違えた問題）リストは空です！素晴らしいです。");
-            return;
-        }
-        // ▼ 変更：要注意リストもシャッフルする
-        currentQuizQueue = shuffleArray([...wrongDueQueue]);
+    updateDashboard();
+
+    const queue = mode === 'wrong' ? appState.queues.wrongDue : appState.queues.normalDue;
+    const emptyMessage = mode === 'wrong'
+        ? '現在、要注意（間違えた問題）リストは空です。'
+        : '今日の新規・復習タスクは完了しています。';
+
+    if (queue.length === 0) {
+        alert(emptyMessage);
+        return;
     }
+
+    appState.queues.current = shuffleArray(queue);
     renderNextQuestion();
 }
 
-// 【修正】出題画面の描画（複数選択のサポート）
 function renderNextQuestion() {
-    if (currentQuizQueue.length === 0) {
+    if (appState.queues.current.length === 0) {
         updateDashboard();
         showView('dashboard-view');
         return;
     }
 
-    currentQuestion = currentQuizQueue[0];
-    currentSelectedOptions = []; // 新しい問題のたびに選択状態をリセット
+    appState.currentQuestion = appState.queues.current[0];
+    appState.selectedOptions = [];
 
-    // 正解の数（1つか、複数か）を取得
-    const requiredCount = currentQuestion.correctAnswers.length;
-
-    // 複数選択の場合は問題文の末尾にヒントを追加
-    let qText = currentQuestion.question;
-    if (requiredCount > 1) {
-        qText += `\n（※ ${requiredCount}つ選んでください）`;
-    }
-    document.getElementById('question-text').innerText = qText;
-
-    const qImageEl = document.getElementById('question-image');
-    if (qImageEl) {
-        if (currentQuestion.questionImage) {
-            qImageEl.src = currentQuestion.questionImage;
-            qImageEl.style.display = 'block';
-        } else {
-            qImageEl.src = '';
-            qImageEl.style.display = 'none';
-        }
-    }
-
-    const optionsContainer = document.getElementById('options-container');
-    optionsContainer.innerHTML = '';
-
-    const shuffledOptions = shuffleArray(currentQuestion.options);
-    shuffledOptions.forEach(option => {
-        const btn = document.createElement('button');
-        btn.innerText = option;
-        // ▼ 変更：直接答え合わせに行かず、クリック処理関数を挟む
-        btn.onclick = (e) => handleOptionClick(e, option);
-        optionsContainer.appendChild(btn);
-    });
-
+    renderQuestionText(appState.currentQuestion);
+    renderImage(elements.questionImage, appState.currentQuestion.questionImage);
+    renderOptions(appState.currentQuestion.options);
     showView('quiz-view');
 }
 
-// ▼▼ 新規追加：選択肢がクリックされた時の処理 ▼▼
-function handleOptionClick(event, option) {
-    const btn = event.target;
-    const requiredCount = currentQuestion.correctAnswers.length;
+function renderQuestionText(question) {
+    const requiredCount = question.correctAnswers.length;
+    const helperText = requiredCount > 1 ? `\n（※ ${requiredCount}つ選んでください）` : '';
+    elements.questionText.textContent = `${question.question}${helperText}`;
+}
 
-    // 選択状態の切り替え
-    if (currentSelectedOptions.includes(option)) {
-        // すでに選ばれていれば解除（もう一度押すとキャンセルできる）
-        currentSelectedOptions = currentSelectedOptions.filter(o => o !== option);
-        btn.classList.remove('selected');
+function renderImage(imageElement, imagePath) {
+    imageElement.src = imagePath || '';
+    imageElement.classList.toggle('hidden', !imagePath);
+}
+
+function renderOptions(options) {
+    elements.optionsContainer.innerHTML = '';
+
+    shuffleArray(options).forEach((option) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = option;
+        button.addEventListener('click', () => handleOptionClick(button, option));
+        elements.optionsContainer.appendChild(button);
+    });
+}
+
+function handleOptionClick(button, option) {
+    const requiredCount = appState.currentQuestion.correctAnswers.length;
+
+    if (appState.selectedOptions.includes(option)) {
+        appState.selectedOptions = appState.selectedOptions.filter((selectedOption) => selectedOption !== option);
+        button.classList.remove('selected');
     } else {
-        // 選ばれていなければ追加
-        currentSelectedOptions.push(option);
-        btn.classList.add('selected');
+        appState.selectedOptions.push(option);
+        button.classList.add('selected');
     }
 
-    // 必要な数だけ選択されたら、自動的に答え合わせへ進む
-    if (currentSelectedOptions.length === requiredCount) {
-        // 誤作動（連打）を防ぐため全てのボタンを無効化
-        const buttons = document.querySelectorAll('#options-container button');
-        buttons.forEach(b => b.disabled = true);
-
-        // ボタンが青くなった状態を0.3秒だけ見せてから答え合わせ画面へ遷移
-        setTimeout(() => {
-            checkAnswer(currentSelectedOptions);
-        }, 300);
+    if (appState.selectedOptions.length === requiredCount) {
+        lockOptionButtons();
+        setTimeout(() => checkAnswer(), 300);
     }
 }
 
-// 【修正】答え合わせ処理（複数選択が完全に一致しているか判定）
-// ※引数が「選ばれた1つの文字列」から「選ばれた配列」に変わりました
-function checkAnswer(selectedOptionsArray) {
-    // 選んだ配列の内容と、正解配列の内容が完全に一致しているかチェック
-    const isCorrect =
-        currentQuestion.correctAnswers.length === selectedOptionsArray.length &&
-        selectedOptionsArray.every(opt => currentQuestion.correctAnswers.includes(opt.trim()));
+function lockOptionButtons() {
+    elements.optionsContainer.querySelectorAll('button').forEach((button) => {
+        button.disabled = true;
+    });
+}
 
-    const titleEl = document.getElementById('result-title');
+function checkAnswer() {
+    const selectedOptions = appState.selectedOptions;
+    const correctAnswers = appState.currentQuestion.correctAnswers;
+    const isCorrect = areSameAnswers(selectedOptions, correctAnswers);
 
-    const correctActions = document.getElementById('correct-actions');
-    const wrongActions = document.getElementById('wrong-actions');
-
-    if (isCorrect) {
-        titleEl.innerText = "⭕️ 正解！";
-        titleEl.style.color = "green";
-        correctActions.style.display = 'block';
-        wrongActions.style.display = 'none';
-    } else {
-        titleEl.innerText = "❌ 不正解...";
-        titleEl.style.color = "red";
-        correctActions.style.display = 'none';
-        wrongActions.style.display = 'block';
-    }
-
-    // 解説画面にも問題文を表示
-    document.getElementById('result-question-text').innerText = currentQuestion.question;
-
-    const correctText = currentQuestion.correctAnswers.join(' / ');
-    document.getElementById('explanation-text').innerHTML =
-        `<strong>正解: ${correctText}</strong><br><br>${currentQuestion.explanation}`;
-
-    const eImageEl = document.getElementById('explanation-image');
-    if (eImageEl) {
-        if (currentQuestion.explanationImage) {
-            eImageEl.src = currentQuestion.explanationImage;
-            eImageEl.style.display = 'block';
-        } else {
-            eImageEl.src = '';
-            eImageEl.style.display = 'none';
-        }
-    }
+    renderResultHeader(isCorrect);
+    renderResultBody(appState.currentQuestion);
+    renderActionArea(isCorrect);
 
     if (isCorrect) {
-        const btn3 = document.getElementById('btn-interval-3');
-        const btn4 = document.getElementById('btn-interval-4');
-        const btn5 = document.getElementById('btn-interval-5');
-
-        if(btn3) btn3.innerText = `(${formatInterval(calculateNextIntervalDays(currentQuestion, 3))})`;
-        if(btn4) btn4.innerText = `(${formatInterval(calculateNextIntervalDays(currentQuestion, 4))})`;
-        if(btn5) btn5.innerText = `(${formatInterval(calculateNextIntervalDays(currentQuestion, 5))})`;
+        updateIntervalPreviewButtons(appState.currentQuestion);
     }
 
     showView('result-view');
 }
-// ---------------------------------------------------
-// 6. 忘却曲線 (SM-2) アルゴリズム（修正版）
-// ---------------------------------------------------
-function processSM2(quality) {
-    let q = currentQuestion;
 
-    const nextIntervalDays = calculateNextIntervalDays(q, quality);
+function areSameAnswers(selectedOptions, correctAnswers) {
+    return selectedOptions.length === correctAnswers.length
+        && selectedOptions.every((option) => correctAnswers.includes(option.trim()));
+}
+
+function renderResultHeader(isCorrect) {
+    elements.resultTitle.textContent = isCorrect ? '正解！' : '不正解...';
+    elements.resultTitle.classList.toggle('text-danger', !isCorrect);
+    elements.resultTitle.style.color = isCorrect ? 'green' : '';
+}
+
+function renderResultBody(question) {
+    elements.resultQuestionText.textContent = question.question;
+    elements.explanationText.innerHTML = `<strong>正解: ${escapeHTML(question.correctAnswers.join(' / '))}</strong><br><br>${escapeHTML(question.explanation)}`;
+    renderImage(elements.explanationImage, question.explanationImage);
+}
+
+function renderActionArea(isCorrect) {
+    elements.correctActions.classList.toggle('hidden', !isCorrect);
+    elements.wrongActions.classList.toggle('hidden', isCorrect);
+}
+
+function updateIntervalPreviewButtons(question) {
+    [3, 4, 5].forEach((quality) => {
+        const buttonText = document.getElementById(`btn-interval-${quality}`);
+        if (!buttonText) return;
+
+        const intervalDays = calculateNextIntervalDays(question, quality);
+        buttonText.textContent = `(${formatInterval(intervalDays)})`;
+    });
+}
+
+function processSM2(quality) {
+    const question = appState.currentQuestion;
+    if (!question) return;
+
+    const nextIntervalDays = calculateNextIntervalDays(question, quality);
 
     if (quality >= 3) {
-        // 正解した場合
-        q.easeFactor = q.easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
-        if (q.easeFactor < 1.3) q.easeFactor = 1.3;
-
-        q.repetitionCount += 1;
-        q.intervalDays = nextIntervalDays;
+        updateQuestionAsCorrect(question, quality, nextIntervalDays);
     } else {
-        // 間違えた場合（repetitionCountを0にするため、次回はwrongDueQueueに入ります）
-        q.repetitionCount = 0;
-        q.easeFactor = Math.max(1.3, q.easeFactor - 0.2);
-        q.intervalDays = 0;
+        updateQuestionAsWrong(question);
     }
 
-    const nextDate = new Date();
-    const addMilliseconds = nextIntervalDays * 24 * 60 * 60 * 1000;
-    q.nextReviewDate = nextDate.getTime() + addMilliseconds;
-
-    // 現在のキューから外す（※後ろには追加しません）
-    currentQuizQueue.shift();
+    question.nextReviewDate = Date.now() + nextIntervalDays * 24 * 60 * 60 * 1000;
+    appState.queues.current.shift();
 
     saveDataToLocal();
     renderNextQuestion();
 }
 
-// --- ▼▼ 追加：インターバル予測とフォーマット関数 ▼▼ ---
-
-// ボタンを押した際の次回出題日（日数）をシミュレーションする関数
-function calculateNextIntervalDays(q, quality) {
-    if (q.repetitionCount === 0) {
-        // ▼ 初回学習（または間違えてリセットされた後）の場合
-        if (quality === 0) return 10 / 1440; // 間違えた: 10分後
-        if (quality === 3) return 0.25;       // 難: 6時間後
-        if (quality === 4) return 1;         // 普: 1日後
-        if (quality === 5) return 4;         // 易: 4日後
-    } else {
-        // ▼ 2回目以降の復習の場合
-        if (quality === 0) return 10 / 1440; // 間違えた: 10分後
-        if (quality === 3) return q.intervalDays * 1.2;           // 難: 少しだけ伸ばす
-        if (quality === 4) return q.intervalDays * q.easeFactor;  // 普: 定着度に応じて伸ばす
-        if (quality === 5) return q.intervalDays * q.easeFactor * 1.3; // 易: さらにボーナスで伸ばす
-    }
-    return 1;
+function updateQuestionAsCorrect(question, quality, nextIntervalDays) {
+    question.easeFactor += 0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02);
+    question.easeFactor = Math.max(1.3, question.easeFactor);
+    question.repetitionCount += 1;
+    question.intervalDays = nextIntervalDays;
 }
 
-// 日数を「○分後」「○時間後」「○日後」「○ヶ月後」のテキストに変換する関数
+function updateQuestionAsWrong(question) {
+    question.repetitionCount = 0;
+    question.easeFactor = Math.max(1.3, question.easeFactor - 0.2);
+    question.intervalDays = 0;
+}
+
+function calculateNextIntervalDays(question, quality) {
+    if (quality === 0) return 10 / 1440;
+
+    if (question.repetitionCount === 0) {
+        const firstIntervals = {
+            3: 0.25,
+            4: 1,
+            5: 4,
+        };
+        return firstIntervals[quality] ?? 1;
+    }
+
+    const reviewIntervals = {
+        3: question.intervalDays * 1.2,
+        4: question.intervalDays * question.easeFactor,
+        5: question.intervalDays * question.easeFactor * 1.3,
+    };
+
+    return reviewIntervals[quality] ?? 1;
+}
+
 function formatInterval(days) {
     if (days < 1 / 24) {
-        return Math.round(days * 24 * 60) + "分後";
-    } else if (days < 1) {
-        return Math.round(days * 24) + "時間後";
-    } else if (days < 30) {
-        return Math.round(days) + "日後";
-    } else {
-        return (days / 30).toFixed(1) + "ヶ月後";
+        return `${Math.round(days * 24 * 60)}分後`;
     }
+
+    if (days < 1) {
+        return `${Math.round(days * 24)}時間後`;
+    }
+
+    if (days < 30) {
+        return `${Math.round(days)}日後`;
+    }
+
+    return `${(days / 30).toFixed(1)}ヶ月後`;
 }
 
-// アプリ起動
-init();
+function escapeHTML(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;')
+        .replace(/\n/g, '<br>');
+}

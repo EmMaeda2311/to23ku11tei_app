@@ -1,67 +1,186 @@
 :root {
     --primary-color: #0056b3;
+    --primary-hover-color: #004494;
+    --danger-color: #dc3545;
+    --danger-hover-color: #c82333;
     --bg-color: #f4f7f6;
+    --surface-color: #fff;
+    --muted-bg-color: #e9ecef;
     --text-color: #333;
+    --sub-text-color: #666;
+    --border-color: #ddd;
+    --shadow-color: rgba(0, 0, 0, 0.1);
+}
+
+* {
+    box-sizing: border-box;
 }
 
 body {
-    font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
-    background-color: var(--bg-color);
-    color: var(--text-color);
     max-width: 600px;
     margin: 0 auto;
     padding: 20px;
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
 }
 
-/* SPAの画面切り替え用クラス */
-.view { display: none; }
-.view.active { display: block; }
+h1,
+h2 {
+    color: var(--primary-color);
+}
+
+.view {
+    display: none;
+}
+
+.view.active {
+    display: block;
+}
+
+.hidden,
+.visually-hidden {
+    display: none;
+}
 
 .card {
-    background: #fff;
     padding: 20px 30px;
+    background: var(--surface-color);
     border-radius: 8px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 6px var(--shadow-color);
 }
 
-h1, h2 { color: var(--primary-color); }
-
-/* ボタンの共通スタイリング */
-button {
+button,
+.btn-secondary {
     width: 100%;
     padding: 12px;
     margin-top: 10px;
     border: 1px solid #ccc;
     border-radius: 4px;
-    background-color: #fff;
-    cursor: pointer;
     font-size: 16px;
-    transition: all 0.2s;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s, opacity 0.2s;
 }
 
-button:hover { background-color: #e9ecef; }
+button {
+    background-color: var(--surface-color);
+}
+
+button:hover {
+    background-color: var(--muted-bg-color);
+}
+
+button:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.btn-primary,
+.btn-danger {
+    color: #fff;
+    border: none;
+}
 
 .btn-primary {
     background-color: var(--primary-color);
-    color: white;
-    border: none;
 }
-.btn-primary:hover { background-color: #004494; }
 
-/* ダッシュボードの統計エリア */
+.btn-primary:hover {
+    background-color: var(--primary-hover-color);
+}
+
+.btn-danger {
+    background-color: var(--danger-color);
+}
+
+.btn-danger:hover {
+    background-color: var(--danger-hover-color);
+}
+
+.btn-secondary {
+    display: block;
+    text-align: center;
+    color: var(--primary-color);
+    background-color: var(--surface-color);
+    border-color: var(--primary-color);
+}
+
+.btn-secondary:hover {
+    background-color: #e6f0fa;
+}
+
+.text-danger {
+    color: var(--danger-color);
+}
+
 .stats {
     display: flex;
     justify-content: space-between;
-    background: #e9ecef;
+    gap: 8px;
     padding: 15px;
-    border-radius: 8px;
     margin-bottom: 20px;
+    background: var(--muted-bg-color);
+    border-radius: 8px;
 }
 
-/* 結果・解説画面の専用スタイル */
+.import-section {
+    padding-top: 20px;
+    margin-top: 30px;
+    border-top: 1px solid var(--border-color);
+}
+
+.import-description {
+    margin-bottom: 10px;
+    color: var(--sub-text-color);
+    font-size: 0.9em;
+}
+
+.question-text {
+    font-size: 1.2em;
+    font-weight: bold;
+    white-space: pre-line;
+}
+
+.options-container button {
+    padding-left: 24px;
+    line-height: 1.5;
+    text-align: left;
+}
+
+.options-container button.selected {
+    font-weight: bold;
+    background-color: #e6f0fa;
+    border: 2px solid var(--primary-color);
+}
+
+.content-image {
+    max-width: 100%;
+    height: auto;
+    margin: 15px 0;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px var(--shadow-color);
+}
+
+.result-question-box {
+    padding: 10px 15px;
+    margin-bottom: 15px;
+    background: #f0f4f8;
+    border-radius: 4px;
+}
+
+.result-question-label {
+    color: var(--sub-text-color);
+    font-size: 0.8em;
+}
+
+.result-question-text {
+    margin-top: 5px;
+    font-weight: bold;
+}
+
 .explanation-box {
-    background: #f8f9fa;
     padding: 15px;
+    background: #f8f9fa;
     border-left: 4px solid var(--primary-color);
 }
 
@@ -75,58 +194,37 @@ button:hover { background-color: #e9ecef; }
     gap: 10px;
 }
 
-.sm2-buttons button { margin-top: 0; }
-.eval-wrong { background: #ffcdd2; }
-.eval-hard { background: #fff9c4; }
-.eval-good { background: #c8e6c9; }
-.eval-easy { background: #bbdefb; }
-
-
-.btn-secondary {
-    display: block;
-    text-align: center;
-    width: 100%;
-    padding: 12px;
-    border: 1px solid var(--primary-color);
-    border-radius: 4px;
-    background-color: #fff;
-    color: var(--primary-color);
-    cursor: pointer;
-    font-size: 16px;
-    transition: all 0.2s;
-    box-sizing: border-box; /* パディングを含めて幅を計算 */
+.sm2-buttons button {
+    margin-top: 0;
 }
 
-.btn-secondary:hover {
-    background-color: #e6f0fa;
+.eval-hard {
+    background: #fff9c4;
 }
 
-.content-image {
-    max-width: 100%;      /* スマホ等の画面幅に収める */
-    height: auto;         /* 縦横比を維持 */
-    margin: 15px 0;       /* 上下に余白を設定 */
-    border-radius: 4px;   /* 角を少し丸くする */
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* 軽い枠線（影）をつける */
+.eval-good {
+    background: #c8e6c9;
 }
 
-
-.btn-danger {
-    background-color: #dc3545;
-    color: white;
-    border: none;
-}
-.btn-danger:hover {
-    background-color: #c82333;
+.eval-easy {
+    background: #bbdefb;
 }
 
-#options-container button {
-    text-align: left;       /* テキストを左寄せにする */
-    padding-left: 24px;     /* 左端が詰まりすぎないようにゆとりを持たせる */
-    line-height: 1.5;       /* 長文が改行された時の行間を見やすくする */
+.wrong-actions {
+    margin-top: 20px;
 }
 
-#options-container button.selected {
-    background-color: #e6f0fa;
-    border: 2px solid var(--primary-color);
-    font-weight: bold;
+@media (max-width: 480px) {
+    body {
+        padding: 12px;
+    }
+
+    .card {
+        padding: 18px;
+    }
+
+    .stats,
+    .sm2-buttons {
+        flex-direction: column;
+    }
 }

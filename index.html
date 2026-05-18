@@ -4,68 +4,62 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>分散学習クイズアプリ</title>
-    <!-- CSSの読み込み -->
     <link rel="stylesheet" href="css/style.css">
-    <!-- JavaScriptの読み込み (deferをつけてHTML解析後に実行) -->
     <script src="js/main.js" defer></script>
 </head>
 <body>
-
 <div id="app">
-    <!-- 1. ダッシュボード画面 -->
-<div id="dashboard-view" class="view active card">
-        <h1>学習ダッシュボード</h1>
-        <div class="stats">
+    <section id="dashboard-view" class="view active card" aria-labelledby="dashboard-title">
+        <h1 id="dashboard-title">学習ダッシュボード</h1>
+
+        <div class="stats" aria-label="学習状況">
             <div><strong>着手率:</strong> <span id="stat-attempted">0</span>%</div>
             <div><strong>新規・復習:</strong> <span id="stat-due">0</span>問</div>
-            <div style="color: #dc3545;"><strong>要注意:</strong> <span id="stat-wrong">0</span>問</div>
+            <div class="text-danger"><strong>要注意:</strong> <span id="stat-wrong">0</span>問</div>
         </div>
 
-        <button class="btn-primary" onclick="startQuiz('normal')">今日の学習を始める</button>
-        <button class="btn-danger" onclick="startQuiz('wrong')">間違えた問題を復習する</button>
+        <button type="button" class="btn-primary" data-action="start-normal">今日の学習を始める</button>
+        <button type="button" class="btn-danger" data-action="start-wrong">間違えた問題を復習する</button>
 
-        <div class="import-section" style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
-            <p style="font-size: 0.9em; color: #666; margin-bottom: 10px;">問題データ(CSV)の追加・更新</p>
+        <div class="import-section">
+            <p class="import-description">問題データ（CSV）の追加・更新</p>
             <label for="csv-upload" class="btn-secondary">CSVファイルを選択</label>
-            <input type="file" id="csv-upload" accept=".csv" onchange="handleCSVUpload(event)" style="display: none;">
+            <input type="file" id="csv-upload" accept=".csv" class="visually-hidden">
         </div>
-    </div>
+    </section>
 
-    <!-- 2. クイズ（問題）画面 -->
-    <div id="quiz-view" class="view card">
-        <h2>問題</h2>
-        <p id="question-text" style="font-size: 1.2em; font-weight: bold;"></p>
-        <img id="question-image" class="content-image" src="" alt="問題画像" style="display: none;">
+    <section id="quiz-view" class="view card" aria-labelledby="quiz-title">
+        <h2 id="quiz-title">問題</h2>
+        <p id="question-text" class="question-text"></p>
+        <img id="question-image" class="content-image hidden" src="" alt="問題画像">
+        <div id="options-container" class="options-container"></div>
+    </section>
 
-        <div id="options-container"></div>
-    </div>
-
-    <!-- 3. 結果・解説画面 -->
-<div id="result-view" class="view card">
+    <section id="result-view" class="view card" aria-labelledby="result-title">
         <h2 id="result-title"></h2>
-        <div style="background: #f0f4f8; padding: 10px 15px; border-radius: 4px; margin-bottom: 15px;">
-            <span style="font-size: 0.8em; color: #666;">問題：</span>
-            <p id="result-question-text" style="font-weight: bold; margin-top: 5px;"></p>
+
+        <div class="result-question-box">
+            <span class="result-question-label">問題：</span>
+            <p id="result-question-text" class="result-question-text"></p>
         </div>
+
         <p id="explanation-text" class="explanation-box"></p>
+        <img id="explanation-image" class="content-image hidden" src="" alt="解説画像">
 
-        <img id="explanation-image" class="content-image" src="" alt="解説画像" style="display: none;">
-
-        <div id="correct-actions" style="display: none;">
+        <div id="correct-actions" class="hidden">
             <p class="evaluation-title">この問題はどうでしたか？（次回出題日を決定）</p>
             <div class="sm2-buttons">
-                <button onclick="processSM2(3)" class="btn-eval eval-hard">難しかった<br><small id="btn-interval-3"></small></button>
-                <button onclick="processSM2(4)" class="btn-eval eval-good">普通<br><small id="btn-interval-4"></small></button>
-                <button onclick="processSM2(5)" class="btn-eval eval-easy">簡単<br><small id="btn-interval-5"></small></button>
+                <button type="button" class="btn-eval eval-hard" data-quality="3">難しかった<br><small id="btn-interval-3"></small></button>
+                <button type="button" class="btn-eval eval-good" data-quality="4">普通<br><small id="btn-interval-4"></small></button>
+                <button type="button" class="btn-eval eval-easy" data-quality="5">簡単<br><small id="btn-interval-5"></small></button>
             </div>
         </div>
 
-        <div id="wrong-actions" style="display: none; margin-top: 20px;">
-            <p class="evaluation-title" style="color: #dc3545; font-weight: bold;">※この問題は「要注意（間違えた問題）リスト」に追加されます</p>
-            <button onclick="processSM2(0)" class="btn-primary" style="background-color: #dc3545;">解説を読んで,次へ進む</button>
+        <div id="wrong-actions" class="wrong-actions hidden">
+            <p class="evaluation-title text-danger">※この問題は「要注意（間違えた問題）リスト」に追加されます</p>
+            <button type="button" class="btn-danger" data-quality="0">解説を読んで、次へ進む</button>
         </div>
-    </div>
+    </section>
 </div>
-
 </body>
 </html>
