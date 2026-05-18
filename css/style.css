@@ -1,0 +1,132 @@
+:root {
+    --primary-color: #0056b3;
+    --bg-color: #f4f7f6;
+    --text-color: #333;
+}
+
+body {
+    font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* SPAの画面切り替え用クラス */
+.view { display: none; }
+.view.active { display: block; }
+
+.card {
+    background: #fff;
+    padding: 20px 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+h1, h2 { color: var(--primary-color); }
+
+/* ボタンの共通スタイリング */
+button {
+    width: 100%;
+    padding: 12px;
+    margin-top: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #fff;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.2s;
+}
+
+button:hover { background-color: #e9ecef; }
+
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+}
+.btn-primary:hover { background-color: #004494; }
+
+/* ダッシュボードの統計エリア */
+.stats {
+    display: flex;
+    justify-content: space-between;
+    background: #e9ecef;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+/* 結果・解説画面の専用スタイル */
+.explanation-box {
+    background: #f8f9fa;
+    padding: 15px;
+    border-left: 4px solid var(--primary-color);
+}
+
+.evaluation-title {
+    margin-top: 20px;
+    font-weight: bold;
+}
+
+.sm2-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.sm2-buttons button { margin-top: 0; }
+.eval-wrong { background: #ffcdd2; }
+.eval-hard { background: #fff9c4; }
+.eval-good { background: #c8e6c9; }
+.eval-easy { background: #bbdefb; }
+
+
+.btn-secondary {
+    display: block;
+    text-align: center;
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--primary-color);
+    border-radius: 4px;
+    background-color: #fff;
+    color: var(--primary-color);
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.2s;
+    box-sizing: border-box; /* パディングを含めて幅を計算 */
+}
+
+.btn-secondary:hover {
+    background-color: #e6f0fa;
+}
+
+.content-image {
+    max-width: 100%;      /* スマホ等の画面幅に収める */
+    height: auto;         /* 縦横比を維持 */
+    margin: 15px 0;       /* 上下に余白を設定 */
+    border-radius: 4px;   /* 角を少し丸くする */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* 軽い枠線（影）をつける */
+}
+
+
+.btn-danger {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+}
+.btn-danger:hover {
+    background-color: #c82333;
+}
+
+#options-container button {
+    text-align: left;       /* テキストを左寄せにする */
+    padding-left: 24px;     /* 左端が詰まりすぎないようにゆとりを持たせる */
+    line-height: 1.5;       /* 長文が改行された時の行間を見やすくする */
+}
+
+#options-container button.selected {
+    background-color: #e6f0fa;
+    border: 2px solid var(--primary-color);
+    font-weight: bold;
+}
