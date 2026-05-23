@@ -55,6 +55,7 @@ function cacheElements() {
 function bindEvents() {
     document.querySelector('[data-action="start-normal"]').addEventListener('click', () => startQuiz('normal'));
     document.querySelector('[data-action="start-wrong"]').addEventListener('click', () => startQuiz('wrong'));
+    document.querySelector('[data-action="stop-quiz"]').addEventListener('click', stopQuiz);
 
     elements.csvUpload.addEventListener('change', handleCSVUpload);
 
@@ -242,6 +243,14 @@ function startQuiz(mode) {
     renderNextQuestion();
 }
 
+function stopQuiz() {
+    appState.queues.current = [];
+    appState.currentQuestion = null;
+    appState.selectedOptions = [];
+    updateDashboard();
+    showView('dashboard-view');
+}
+
 function renderNextQuestion() {
     if (appState.queues.current.length === 0) {
         updateDashboard();
@@ -333,7 +342,7 @@ function renderResultHeader(isCorrect) {
 
 function renderResultBody(question) {
     elements.resultQuestionText.textContent = question.question;
-    elements.explanationText.innerHTML = `<strong>正解: ${escapeHTML(question.correctAnswers.join(' / '))}</strong><br><br>${escapeHTML(question.explanation)}`;
+    elements.explanationText.innerHTML = `<span class="correct-answer-label">正解</span><strong class="correct-answer-text">${escapeHTML(question.correctAnswers.join(' / '))}</strong><br><br>${escapeHTML(question.explanation)}`;
     renderImage(elements.explanationImage, question.explanationImage);
 }
 
