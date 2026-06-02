@@ -59,6 +59,28 @@ h2 {
     font-size: 1.5rem;
 }
 
+.app-brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 28px;
+    text-align: center;
+}
+
+.app-logo {
+    width: clamp(84px, 28vw, 128px);
+    height: auto;
+    display: block;
+}
+
+.app-title {
+    margin: 10px 0 0;
+    color: var(--primary-color);
+    font-size: 1.9rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
 .view {
     display: none;
 }
@@ -144,6 +166,16 @@ button:disabled {
 
 .text-danger {
     color: var(--danger-color);
+}
+
+.google-sync-section {
+    margin-bottom: 24px;
+}
+
+.google-sync-status {
+    margin: 0 0 10px;
+    color: var(--sub-text-color);
+    font-size: 0.95em;
 }
 
 .stats {
@@ -286,6 +318,14 @@ button:disabled {
 }
 
 @media (max-width: 480px) {
+    .app-brand {
+        margin-bottom: 22px;
+    }
+
+    .app-title {
+        font-size: 1.65rem;
+    }
+
     h1 {
         font-size: 1.5rem;
     }
