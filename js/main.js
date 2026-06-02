@@ -3,7 +3,9 @@
 const STORAGE_KEY = 'myQuizData';
 const GOOGLE_CLIENT_ID = '294726650739-r0pc0pardvuvf6jt86hc9ee9tdl8ngep.apps.googleusercontent.com';
 const GOOGLE_DRIVE_APPDATA_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+const GOOGLE_DRIVE_DATA_FILE_NAME = 'quiz-app-data.json';
 const GOOGLE_DRIVE_UPLOAD_ENDPOINT = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+const GOOGLE_DRIVE_FILES_ENDPOINT = 'https://www.googleapis.com/drive/v3/files';
 const DEFAULT_LEARNING_STATE = Object.freeze({
     repetitionCount: 0,
     easeFactor: 2.5,
@@ -23,6 +25,7 @@ const appState = {
     google: {
         tokenClient: null,
         accessToken: null,
+        dataFileId: null,
         isConnected: false,
     },
 };
@@ -217,10 +220,90 @@ async function createGoogleDriveJsonFile(fileName, data) {
 
     if (!response.ok) {
         const message = responseBody.error?.message || `HTTP ${response.status}`;
-        throw new Error(message);
+        const error = new Error(message);
+        error.status = response.status;
+        throw error;
     }
 
     return responseBody;
+}
+
+async function saveAppDataToDrive() {
+    if (!appState.google.accessToken) return null;
+
+    const fileId = appState.google.dataFileId || await findGoogleDriveJsonFileId(GOOGLE_DRIVE_DATA_FILE_NAME);
+    let savedFile;
+
+    if (fileId) {
+        try {
+            savedFile = await updateGoogleDriveJsonFile(fileId, appState.data);
+        } catch (error) {
+            if (error.status !== 404) throw error;
+
+            appState.google.dataFileId = null;
+            savedFile = await createGoogleDriveJsonFile(GOOGLE_DRIVE_DATA_FILE_NAME, appState.data);
+        }
+    } else {
+        savedFile = await createGoogleDriveJsonFile(GOOGLE_DRIVE_DATA_FILE_NAME, appState.data);
+    }
+
+    appState.google.dataFileId = savedFile.id || fileId;
+    setGoogleAuthStatus('Google Driveへ保存しました。');
+    return savedFile;
+}
+
+async function findGoogleDriveJsonFileId(fileName) {
+    const query = [
+        `name = '${escapeDriveQueryValue(fileName)}'`,
+        'trashed = false',
+    ].join(' and ');
+    const params = new URLSearchParams({
+        spaces: 'appDataFolder',
+        fields: 'files(id,name,modifiedTime)',
+        pageSize: '1',
+        q: query,
+    });
+
+    const response = await fetch(`${GOOGLE_DRIVE_FILES_ENDPOINT}?${params.toString()}`, {
+        headers: {
+            Authorization: `Bearer ${appState.google.accessToken}`,
+        },
+    });
+    const responseBody = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        const message = responseBody.error?.message || `HTTP ${response.status}`;
+        const error = new Error(message);
+        error.status = response.status;
+        throw error;
+    }
+
+    return responseBody.files?.[0]?.id || null;
+}
+
+async function updateGoogleDriveJsonFile(fileId, data) {
+    const response = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=media`, {
+        method: 'PATCH',
+        headers: {
+            Authorization: `Bearer ${appState.google.accessToken}`,
+            'Content-Type': 'application/json; charset=UTF-8',
+        },
+        body: JSON.stringify(data, null, 2),
+    });
+    const responseBody = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        const message = responseBody.error?.message || `HTTP ${response.status}`;
+        const error = new Error(message);
+        error.status = response.status;
+        throw error;
+    }
+
+    return responseBody;
+}
+
+function escapeDriveQueryValue(value) {
+    return String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
 function normalizeAppData(data) {
@@ -242,14 +325,28 @@ function saveDataToLocal() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(appState.data));
 }
 
+async function persistAppData() {
+    saveDataToLocal();
+
+    if (!appState.google.isConnected) return;
+
+    try {
+        await saveAppDataToDrive();
+    } catch (error) {
+        console.error('Google Driveへのデータ保存に失敗しました。', error);
+        setGoogleAuthStatus(`Google Driveへの保存に失敗しました: ${error.message}`);
+    }
+}
+
 function handleCSVUpload(event) {
     const [file] = event.target.files;
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (loadEvent) => {
+    reader.onload = async (loadEvent) => {
         const result = importCSVAndMerge(loadEvent.target.result);
         event.target.value = '';
+        await persistAppData();
         alert(`CSVの読み込みが完了しました！\n・新規追加: ${result.addedCount}問\n・更新: ${result.updatedCount}問`);
     };
     reader.onerror = () => alert('CSVファイルの読み込みに失敗しました。');
@@ -280,7 +377,6 @@ function importCSVAndMerge(csvText) {
         }
     });
 
-    saveDataToLocal();
     updateDashboard();
 
     return { addedCount, updatedCount };
@@ -522,7 +618,7 @@ function processSM2(quality) {
     question.nextReviewDate = Date.now() + nextIntervalDays * 24 * 60 * 60 * 1000;
     appState.queues.current.shift();
 
-    saveDataToLocal();
+    persistAppData();
     renderNextQuestion();
 }
 
