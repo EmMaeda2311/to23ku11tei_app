@@ -10,13 +10,15 @@
 </head>
 <body>
 <div id="app">
-    <section id="dashboard-view" class="view active card" aria-labelledby="dashboard-title">
-        <h1 id="dashboard-title">学習ダッシュボード</h1>
+    <section id="dashboard-view" class="view active card" aria-labelledby="app-title">
+        <header class="app-brand" aria-label="アプリ名">
+            <img src="images/logo.webp" alt="" class="app-logo">
+            <h1 id="app-title" class="app-title">レペナジ</h1>
+        </header>
 
         <div class="google-sync-section" aria-label="Google連携">
             <p class="google-sync-status" id="google-sync-status">Google未連携</p>
             <button type="button" class="btn-secondary" id="google-auth-button">Googleで連携する</button>
-            <button type="button" class="btn-secondary" id="google-drive-test-button" disabled>Google Drive保存テスト</button>
         </div>
 
         <div class="stats" aria-label="学習状況">
