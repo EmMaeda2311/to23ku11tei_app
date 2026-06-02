@@ -1,6 +1,8 @@
 'use strict';
 
 const STORAGE_KEY = 'myQuizData';
+const GOOGLE_CLIENT_ID = '294726650739-r0pc0pardvuvf6jt86hc9ee9tdl8ngep.apps.googleusercontent.com';
+const GOOGLE_DRIVE_APPDATA_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
 const DEFAULT_LEARNING_STATE = Object.freeze({
     repetitionCount: 0,
     easeFactor: 2.5,
@@ -17,6 +19,11 @@ const appState = {
     },
     currentQuestion: null,
     selectedOptions: [],
+    google: {
+        tokenClient: null,
+        accessToken: null,
+        isConnected: false,
+    },
 };
 
 const elements = {};
@@ -26,6 +33,7 @@ document.addEventListener('DOMContentLoaded', init);
 function init() {
     cacheElements();
     bindEvents();
+    initGoogleAuth();
     loadDataFromLocal();
     updateDashboard();
 }
@@ -39,6 +47,8 @@ function cacheElements() {
         statAttempted: document.getElementById('stat-attempted'),
         statDue: document.getElementById('stat-due'),
         statWrong: document.getElementById('stat-wrong'),
+        googleAuthButton: document.getElementById('google-auth-button'),
+        googleSyncStatus: document.getElementById('google-sync-status'),
         csvUpload: document.getElementById('csv-upload'),
         questionText: document.getElementById('question-text'),
         questionImage: document.getElementById('question-image'),
@@ -56,6 +66,7 @@ function bindEvents() {
     document.querySelector('[data-action="start-normal"]').addEventListener('click', () => startQuiz('normal'));
     document.querySelector('[data-action="start-wrong"]').addEventListener('click', () => startQuiz('wrong'));
     document.querySelector('[data-action="stop-quiz"]').addEventListener('click', stopQuiz);
+    elements.googleAuthButton.addEventListener('click', requestGoogleAccess);
 
     elements.csvUpload.addEventListener('change', handleCSVUpload);
 
@@ -75,6 +86,71 @@ function loadDataFromLocal() {
         console.error('保存データの読み込みに失敗しました。', error);
         appState.data = { questions: [] };
     }
+}
+
+function initGoogleAuth(retryCount = 0) {
+    if (!isGoogleClientIdConfigured()) {
+        setGoogleAuthStatus('Google Client IDを設定してください。');
+        elements.googleAuthButton.disabled = true;
+        return;
+    }
+
+    if (!window.google?.accounts?.oauth2) {
+        if (retryCount < 20) {
+            setTimeout(() => initGoogleAuth(retryCount + 1), 250);
+            return;
+        }
+
+        setGoogleAuthStatus('Google認証ライブラリを読み込めませんでした。');
+        elements.googleAuthButton.disabled = true;
+        return;
+    }
+
+    appState.google.tokenClient = window.google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: GOOGLE_DRIVE_APPDATA_SCOPE,
+        callback: handleGoogleTokenResponse,
+        error_callback: handleGoogleAuthError,
+    });
+
+    elements.googleAuthButton.disabled = false;
+    setGoogleAuthStatus('Google未連携');
+}
+
+function isGoogleClientIdConfigured() {
+    return GOOGLE_CLIENT_ID && !GOOGLE_CLIENT_ID.startsWith('YOUR_GOOGLE_CLIENT_ID');
+}
+
+function requestGoogleAccess() {
+    if (!appState.google.tokenClient) {
+        setGoogleAuthStatus('Google認証の準備がまだ完了していません。');
+        return;
+    }
+
+    appState.google.tokenClient.requestAccessToken({
+        prompt: appState.google.accessToken ? '' : 'consent',
+    });
+}
+
+function handleGoogleTokenResponse(tokenResponse) {
+    if (tokenResponse.error) {
+        setGoogleAuthStatus(`Google連携に失敗しました: ${tokenResponse.error}`);
+        return;
+    }
+
+    appState.google.accessToken = tokenResponse.access_token;
+    appState.google.isConnected = true;
+    elements.googleAuthButton.textContent = 'Google連携を更新する';
+    setGoogleAuthStatus('Google連携済み');
+}
+
+function handleGoogleAuthError(error) {
+    const message = error?.type || error?.message || '不明なエラー';
+    setGoogleAuthStatus(`Google連携に失敗しました: ${message}`);
+}
+
+function setGoogleAuthStatus(message) {
+    elements.googleSyncStatus.textContent = message;
 }
 
 function normalizeAppData(data) {

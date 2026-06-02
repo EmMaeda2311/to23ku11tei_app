@@ -5,12 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>分散学習クイズアプリ</title>
     <link rel="stylesheet" href="css/style.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="js/main.js" defer></script>
 </head>
 <body>
 <div id="app">
     <section id="dashboard-view" class="view active card" aria-labelledby="dashboard-title">
         <h1 id="dashboard-title">学習ダッシュボード</h1>
+
+        <div class="google-sync-section" aria-label="Google連携">
+            <p class="google-sync-status" id="google-sync-status">Google未連携</p>
+            <button type="button" class="btn-secondary" id="google-auth-button">Googleで連携する</button>
+        </div>
 
         <div class="stats" aria-label="学習状況">
             <div><strong>着手率:</strong> <span id="stat-attempted">0</span>%</div>
