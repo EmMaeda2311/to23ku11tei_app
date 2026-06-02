@@ -3,6 +3,7 @@
 const STORAGE_KEY = 'myQuizData';
 const GOOGLE_CLIENT_ID = '294726650739-r0pc0pardvuvf6jt86hc9ee9tdl8ngep.apps.googleusercontent.com';
 const GOOGLE_DRIVE_APPDATA_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+const GOOGLE_DRIVE_UPLOAD_ENDPOINT = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
 const DEFAULT_LEARNING_STATE = Object.freeze({
     repetitionCount: 0,
     easeFactor: 2.5,
@@ -48,6 +49,7 @@ function cacheElements() {
         statDue: document.getElementById('stat-due'),
         statWrong: document.getElementById('stat-wrong'),
         googleAuthButton: document.getElementById('google-auth-button'),
+        googleDriveTestButton: document.getElementById('google-drive-test-button'),
         googleSyncStatus: document.getElementById('google-sync-status'),
         csvUpload: document.getElementById('csv-upload'),
         questionText: document.getElementById('question-text'),
@@ -67,6 +69,7 @@ function bindEvents() {
     document.querySelector('[data-action="start-wrong"]').addEventListener('click', () => startQuiz('wrong'));
     document.querySelector('[data-action="stop-quiz"]').addEventListener('click', stopQuiz);
     elements.googleAuthButton.addEventListener('click', requestGoogleAccess);
+    elements.googleDriveTestButton.addEventListener('click', saveGoogleDriveTestFile);
 
     elements.csvUpload.addEventListener('change', handleCSVUpload);
 
@@ -141,6 +144,7 @@ function handleGoogleTokenResponse(tokenResponse) {
     appState.google.accessToken = tokenResponse.access_token;
     appState.google.isConnected = true;
     elements.googleAuthButton.textContent = 'Google連携を更新する';
+    elements.googleDriveTestButton.disabled = false;
     setGoogleAuthStatus('Google連携済み');
 }
 
@@ -151,6 +155,72 @@ function handleGoogleAuthError(error) {
 
 function setGoogleAuthStatus(message) {
     elements.googleSyncStatus.textContent = message;
+}
+
+async function saveGoogleDriveTestFile() {
+    if (!appState.google.accessToken) {
+        setGoogleAuthStatus('Google連携後に保存テストを実行してください。');
+        return;
+    }
+
+    elements.googleDriveTestButton.disabled = true;
+    setGoogleAuthStatus('Google Driveへテスト保存中...');
+
+    try {
+        const savedFile = await createGoogleDriveJsonFile(
+            'quiz-app-test.json',
+            {
+                connectionTest: true,
+                savedAt: new Date().toISOString(),
+            }
+        );
+
+        setGoogleAuthStatus(`Google Driveへのテスト保存が完了しました: ${savedFile.id}`);
+    } catch (error) {
+        console.error('Google Driveへのテスト保存に失敗しました。', error);
+        setGoogleAuthStatus(`Google Driveへのテスト保存に失敗しました: ${error.message}`);
+    } finally {
+        elements.googleDriveTestButton.disabled = false;
+    }
+}
+
+async function createGoogleDriveJsonFile(fileName, data) {
+    const boundary = `quiz-app-${Date.now()}`;
+    const metadata = {
+        name: fileName,
+        parents: ['appDataFolder'],
+        mimeType: 'application/json',
+    };
+    const body = [
+        `--${boundary}`,
+        'Content-Type: application/json; charset=UTF-8',
+        '',
+        JSON.stringify(metadata),
+        `--${boundary}`,
+        'Content-Type: application/json; charset=UTF-8',
+        '',
+        JSON.stringify(data, null, 2),
+        `--${boundary}--`,
+        '',
+    ].join('\n');
+
+    const response = await fetch(GOOGLE_DRIVE_UPLOAD_ENDPOINT, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${appState.google.accessToken}`,
+            'Content-Type': `multipart/related; boundary=${boundary}`,
+        },
+        body,
+    });
+
+    const responseBody = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        const message = responseBody.error?.message || `HTTP ${response.status}`;
+        throw new Error(message);
+    }
+
+    return responseBody;
 }
 
 function normalizeAppData(data) {
