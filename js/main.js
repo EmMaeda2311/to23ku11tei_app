@@ -12,6 +12,7 @@ const DEFAULT_LEARNING_STATE = Object.freeze({
     easeFactor: 2.5,
     intervalDays: 0,
     nextReviewDate: null,
+    lastQuality: null,
 });
 
 const appState = {
@@ -51,16 +52,32 @@ function cacheElements() {
         quizView: document.getElementById('quiz-view'),
         resultView: document.getElementById('result-view'),
         statAttempted: document.getElementById('stat-attempted'),
+        attemptedRateBar: document.getElementById('attempted-rate-bar'),
         statDue: document.getElementById('stat-due'),
         statWrong: document.getElementById('stat-wrong'),
+        warningRateBar: document.getElementById('warning-rate-bar'),
+        understandingSummary: document.getElementById('understanding-summary'),
+        understandingWrongSegment: document.getElementById('understanding-wrong-segment'),
+        understandingHardSegment: document.getElementById('understanding-hard-segment'),
+        understandingGoodSegment: document.getElementById('understanding-good-segment'),
+        understandingEasySegment: document.getElementById('understanding-easy-segment'),
+        understandingUnknownSegment: document.getElementById('understanding-unknown-segment'),
+        brandMenuToggle: document.getElementById('brand-menu-toggle'),
+        learningModeMenu: document.getElementById('learning-mode-menu'),
         googleAuthButton: document.getElementById('google-auth-button'),
+        googleAuthButtonContents: document.querySelector('#google-auth-button .gsi-material-button-contents'),
         googleSyncStatus: document.getElementById('google-sync-status'),
+        settingsToggle: document.getElementById('settings-toggle'),
+        settingsOverlay: document.getElementById('settings-overlay'),
+        settingsDrawer: document.getElementById('settings-drawer'),
+        settingsCloseButton: document.getElementById('settings-close-button'),
         csvUpload: document.getElementById('csv-upload'),
         questionText: document.getElementById('question-text'),
         questionImage: document.getElementById('question-image'),
         optionsContainer: document.getElementById('options-container'),
         resultTitle: document.getElementById('result-title'),
         resultQuestionText: document.getElementById('result-question-text'),
+        resultOptionsContainer: document.getElementById('result-options-container'),
         explanationText: document.getElementById('explanation-text'),
         explanationImage: document.getElementById('explanation-image'),
         correctActions: document.getElementById('correct-actions'),
@@ -72,7 +89,12 @@ function bindEvents() {
     document.querySelector('[data-action="start-normal"]').addEventListener('click', () => startQuiz('normal'));
     document.querySelector('[data-action="start-wrong"]').addEventListener('click', () => startQuiz('wrong'));
     document.querySelector('[data-action="stop-quiz"]').addEventListener('click', stopQuiz);
+    elements.brandMenuToggle.addEventListener('click', toggleLearningModeMenu);
     elements.googleAuthButton.addEventListener('click', () => requestGoogleAccess({ prompt: appState.google.accessToken ? '' : 'consent' }));
+    elements.settingsToggle.addEventListener('click', openSettingsDrawer);
+    elements.settingsOverlay.addEventListener('click', closeSettingsDrawer);
+    elements.settingsCloseButton.addEventListener('click', closeSettingsDrawer);
+    bindSettingsSwipe();
 
     elements.csvUpload.addEventListener('change', handleCSVUpload);
 
@@ -122,7 +144,7 @@ function initGoogleAuth(retryCount = 0) {
     elements.googleAuthButton.disabled = false;
 
     if (wasGoogleConnected()) {
-        elements.googleAuthButton.textContent = 'Google Driveから読み込む';
+        setGoogleAuthButtonText('Google Driveから読み込む');
         setGoogleAuthStatus('前回Google連携済みです。ボタンを押すとDriveから読み込みます。');
         return;
     }
@@ -158,7 +180,7 @@ async function handleGoogleTokenResponse(tokenResponse) {
     appState.google.accessToken = tokenResponse.access_token;
     appState.google.isConnected = true;
     localStorage.setItem(GOOGLE_CONNECTED_STORAGE_KEY, 'true');
-    elements.googleAuthButton.textContent = 'Google連携を更新する';
+    setGoogleAuthButtonText('Google連携を更新する');
     setGoogleAuthStatus('Google Driveから読み込み中...');
     await loadAppDataFromDrive();
 }
@@ -170,6 +192,62 @@ function handleGoogleAuthError(error) {
 
 function setGoogleAuthStatus(message) {
     elements.googleSyncStatus.textContent = message;
+}
+
+function setGoogleAuthButtonText(text) {
+    elements.googleAuthButtonContents.textContent = text;
+}
+
+function toggleLearningModeMenu() {
+    const isOpen = elements.learningModeMenu.classList.toggle('is-open');
+    elements.brandMenuToggle.setAttribute('aria-expanded', String(isOpen));
+}
+
+function openSettingsDrawer() {
+    elements.settingsOverlay.classList.remove('hidden');
+    elements.settingsOverlay.classList.add('is-visible');
+    elements.settingsDrawer.classList.add('is-open');
+    elements.settingsDrawer.setAttribute('aria-hidden', 'false');
+    elements.settingsToggle.setAttribute('aria-expanded', 'true');
+}
+
+function closeSettingsDrawer() {
+    elements.settingsOverlay.classList.remove('is-visible');
+    elements.settingsDrawer.classList.remove('is-open');
+    elements.settingsDrawer.setAttribute('aria-hidden', 'true');
+    elements.settingsToggle.setAttribute('aria-expanded', 'false');
+
+    window.setTimeout(() => {
+        if (!elements.settingsOverlay.classList.contains('is-visible')) {
+            elements.settingsOverlay.classList.add('hidden');
+        }
+    }, 220);
+}
+
+function bindSettingsSwipe() {
+    let startX = null;
+    let startY = null;
+
+    elements.settingsDrawer.addEventListener('touchstart', (event) => {
+        const [touch] = event.touches;
+        startX = touch.clientX;
+        startY = touch.clientY;
+    }, { passive: true });
+
+    elements.settingsDrawer.addEventListener('touchend', (event) => {
+        if (startX === null || startY === null) return;
+
+        const [touch] = event.changedTouches;
+        const diffX = touch.clientX - startX;
+        const diffY = touch.clientY - startY;
+
+        startX = null;
+        startY = null;
+
+        if (diffX > 70 && Math.abs(diffY) < 80) {
+            closeSettingsDrawer();
+        }
+    }, { passive: true });
 }
 
 async function createGoogleDriveJsonFile(fileName, data) {
@@ -486,19 +564,73 @@ function shuffleArray(array) {
 function updateDashboard() {
     const questions = appState.data.questions;
     const total = questions.length;
-    const attempted = questions.filter((question) => question.nextReviewDate !== null).length;
+    const attemptedQuestions = questions.filter(isAttemptedQuestion);
+    const attempted = attemptedQuestions.length;
     const now = Date.now();
+    const understandingCounts = countUnderstandingLevels(attemptedQuestions);
 
     appState.queues.wrongDue = questions.filter(isWrongQuestion);
     appState.queues.normalDue = questions.filter((question) => isNormalDueQuestion(question, now));
 
-    elements.statAttempted.textContent = total > 0 ? Math.round((attempted / total) * 100) : 0;
+    elements.statAttempted.textContent = `${attempted} / ${total}`;
+    elements.attemptedRateBar.style.width = `${calculatePercentage(attempted, total)}%`;
     elements.statDue.textContent = appState.queues.normalDue.length;
-    elements.statWrong.textContent = appState.queues.wrongDue.length;
+    elements.statWrong.textContent = `${appState.queues.wrongDue.length} / ${attempted}`;
+    elements.warningRateBar.style.width = `${calculatePercentage(appState.queues.wrongDue.length, attempted)}%`;
+    updateUnderstandingBar(understandingCounts, attempted);
+}
+
+function isAttemptedQuestion(question) {
+    return question.nextReviewDate !== null;
 }
 
 function isWrongQuestion(question) {
     return question.nextReviewDate !== null && question.repetitionCount === 0;
+}
+
+function countUnderstandingLevels(questions) {
+    return questions.reduce((counts, question) => {
+        switch (Number(question.lastQuality)) {
+            case 0:
+                counts.wrong += 1;
+                break;
+            case 3:
+                counts.hard += 1;
+                break;
+            case 4:
+                counts.good += 1;
+                break;
+            case 5:
+                counts.easy += 1;
+                break;
+            default:
+                counts.unknown += 1;
+        }
+
+        return counts;
+    }, {
+        wrong: 0,
+        hard: 0,
+        good: 0,
+        easy: 0,
+        unknown: 0,
+    });
+}
+
+function updateUnderstandingBar(counts, attempted) {
+    elements.understandingWrongSegment.style.width = `${calculatePercentage(counts.wrong, attempted)}%`;
+    elements.understandingHardSegment.style.width = `${calculatePercentage(counts.hard, attempted)}%`;
+    elements.understandingGoodSegment.style.width = `${calculatePercentage(counts.good, attempted)}%`;
+    elements.understandingEasySegment.style.width = `${calculatePercentage(counts.easy, attempted)}%`;
+    elements.understandingUnknownSegment.style.width = `${calculatePercentage(counts.unknown, attempted)}%`;
+
+    const evaluated = attempted - counts.unknown;
+    elements.understandingSummary.textContent = attempted > 0 ? `評価済み ${evaluated} / ${attempted}` : '未着手';
+}
+
+function calculatePercentage(numerator, denominator) {
+    if (denominator <= 0) return 0;
+    return Math.min(100, Math.max(0, (numerator / denominator) * 100));
 }
 
 function isNormalDueQuestion(question, now) {
@@ -598,7 +730,7 @@ function checkAnswer() {
     const isCorrect = areSameAnswers(selectedOptions, correctAnswers);
 
     renderResultHeader(isCorrect);
-    renderResultBody(appState.currentQuestion);
+    renderResultBody(appState.currentQuestion, isCorrect);
     renderActionArea(isCorrect);
 
     if (isCorrect) {
@@ -615,14 +747,47 @@ function areSameAnswers(selectedOptions, correctAnswers) {
 
 function renderResultHeader(isCorrect) {
     elements.resultTitle.textContent = isCorrect ? '正解！' : '不正解...';
-    elements.resultTitle.classList.toggle('text-danger', !isCorrect);
-    elements.resultTitle.style.color = isCorrect ? 'green' : '';
+    elements.resultTitle.classList.toggle('result-title-correct', isCorrect);
+    elements.resultTitle.classList.toggle('result-title-wrong', !isCorrect);
 }
 
-function renderResultBody(question) {
-    elements.resultQuestionText.textContent = question.question;
-    elements.explanationText.innerHTML = `<span class="correct-answer-label">正解</span><strong class="correct-answer-text">${escapeHTML(question.correctAnswers.join(' / '))}</strong><br><br>${escapeHTML(question.explanation)}`;
+function renderResultBody(question, isCorrect) {
+    if (isCorrect) {
+        elements.resultQuestionText.textContent = question.question;
+    } else {
+        elements.resultQuestionText.innerHTML = highlightQuestionInstructions(question.question);
+    }
+
+    renderResultOptions(question);
+
+    const correctAnswerLines = question.correctAnswers
+        .map((answer) => `<span>・${escapeHTML(answer)}</span>`)
+        .join('');
+
+    elements.explanationText.innerHTML = `<span class="correct-answer-label">正解</span><strong class="correct-answer-text">${correctAnswerLines}</strong><span class="explanation-text-body">${escapeHTML(question.explanation)}</span>`;
     renderImage(elements.explanationImage, question.explanationImage);
+}
+
+function highlightQuestionInstructions(questionText) {
+    return escapeHTML(questionText)
+        .replaceAll('誤っているもの', '<span class="instruction-wrong">誤っているもの</span>')
+        .replaceAll('正しいもの', '<span class="instruction-correct">正しいもの</span>');
+}
+
+function renderResultOptions(question) {
+    elements.resultOptionsContainer.innerHTML = '';
+
+    question.options.forEach((option) => {
+        const optionElement = document.createElement('div');
+        const isCorrect = question.correctAnswers.includes(option.trim());
+        const isSelected = appState.selectedOptions.includes(option);
+
+        optionElement.className = 'result-option';
+        optionElement.classList.toggle('result-option-correct', isCorrect);
+        optionElement.classList.toggle('result-option-wrong', isSelected && !isCorrect);
+        optionElement.textContent = option;
+        elements.resultOptionsContainer.appendChild(optionElement);
+    });
 }
 
 function renderActionArea(isCorrect) {
@@ -660,6 +825,7 @@ function processSM2(quality) {
 }
 
 function updateQuestionAsCorrect(question, quality, nextIntervalDays) {
+    question.lastQuality = quality;
     question.easeFactor += 0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02);
     question.easeFactor = Math.max(1.3, question.easeFactor);
     question.repetitionCount += 1;
@@ -667,6 +833,7 @@ function updateQuestionAsCorrect(question, quality, nextIntervalDays) {
 }
 
 function updateQuestionAsWrong(question) {
+    question.lastQuality = 0;
     question.repetitionCount = 0;
     question.easeFactor = Math.max(1.3, question.easeFactor - 0.2);
     question.intervalDays = 0;

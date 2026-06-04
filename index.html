@@ -12,29 +12,90 @@
 <div id="app">
     <section id="dashboard-view" class="view active card" aria-labelledby="app-title">
         <header class="app-brand" aria-label="アプリ名">
-            <img src="images/logo.webp" alt="" class="app-logo">
-            <h1 id="app-title" class="app-title">レペナジ</h1>
+            <button type="button" class="brand-button" id="brand-menu-toggle" aria-controls="learning-mode-menu" aria-expanded="false">
+                <h1 id="app-title" class="app-title">レペナジ</h1>
+                <img src="images/logo.webp" alt="" class="app-logo">
+                <span class="brand-hint">押して学習を選ぶ</span>
+            </button>
         </header>
 
-        <div class="google-sync-section" aria-label="Google連携">
-            <p class="google-sync-status" id="google-sync-status">Google未連携</p>
-            <button type="button" class="btn-secondary" id="google-auth-button">Googleで連携する</button>
+        <div id="learning-mode-menu" class="learning-mode-menu" aria-label="学習モード">
+            <button type="button" class="learning-mode-card" data-action="start-normal">
+                <img src="images/today_quiz.webp" alt="" class="learning-mode-image">
+                <span class="learning-mode-label">今日の学習</span>
+            </button>
+            <button type="button" class="learning-mode-card" data-action="start-wrong">
+                <img src="images/wrong_quiz.webp" alt="" class="learning-mode-image">
+                <span class="learning-mode-label">間違いを復習</span>
+            </button>
         </div>
 
         <div class="stats" aria-label="学習状況">
-            <div><strong>着手率:</strong> <span id="stat-attempted">0</span>%</div>
-            <div><strong>新規・復習:</strong> <span id="stat-due">0</span>問</div>
-            <div class="text-danger"><strong>要注意:</strong> <span id="stat-wrong">0</span>問</div>
+            <div class="progress-panel">
+                <div class="progress-header">
+                    <strong>着手率</strong>
+                    <span id="stat-attempted">0 / 0</span>
+                </div>
+                <div class="progress-bar" aria-hidden="true">
+                    <div class="progress-fill progress-fill-attempted" id="attempted-rate-bar"></div>
+                </div>
+            </div>
+
+            <div class="progress-panel">
+                <div class="progress-header">
+                    <strong>要注意率</strong>
+                    <span id="stat-wrong">0 / 0</span>
+                </div>
+                <div class="progress-bar" aria-hidden="true">
+                    <div class="progress-fill progress-fill-warning" id="warning-rate-bar"></div>
+                </div>
+            </div>
+
+            <div class="progress-panel progress-panel-wide">
+                <div class="progress-header">
+                    <strong>理解率</strong>
+                    <span id="understanding-summary">未着手</span>
+                </div>
+                <div class="understanding-bar" aria-hidden="true">
+                    <div class="understanding-segment understanding-wrong" id="understanding-wrong-segment"></div>
+                    <div class="understanding-segment understanding-hard" id="understanding-hard-segment"></div>
+                    <div class="understanding-segment understanding-good" id="understanding-good-segment"></div>
+                    <div class="understanding-segment understanding-easy" id="understanding-easy-segment"></div>
+                    <div class="understanding-segment understanding-unknown" id="understanding-unknown-segment"></div>
+                </div>
+                <div class="understanding-legend">
+                    <span><i class="legend-dot legend-wrong"></i>間違い</span>
+                    <span><i class="legend-dot legend-hard"></i>難しい</span>
+                    <span><i class="legend-dot legend-good"></i>普通</span>
+                    <span><i class="legend-dot legend-easy"></i>簡単</span>
+                </div>
+            </div>
+
+            <div class="dashboard-counts">
+                <span>新規・復習 <strong id="stat-due">0</strong>問</span>
+            </div>
         </div>
 
-        <button type="button" class="btn-primary" data-action="start-normal">今日の学習を始める</button>
-        <button type="button" class="btn-danger" data-action="start-wrong">間違えた問題を復習する</button>
-
-        <div class="import-section">
-            <p class="import-description">問題データ（CSV）の追加・更新</p>
-            <label for="csv-upload" class="btn-secondary">CSVファイルを選択</label>
-            <input type="file" id="csv-upload" accept=".csv" class="visually-hidden">
+        <div class="google-sync-section" aria-label="Google連携">
+            <p class="google-sync-status" id="google-sync-status">Google未連携</p>
+            <button type="button" class="gsi-material-button" id="google-auth-button">
+                <div class="gsi-material-button-state"></div>
+                <div class="gsi-material-button-content-wrapper">
+                    <div class="gsi-material-button-icon">
+                        <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" xmlns:xlink="http://www.w3.org/1999/xlink" style="display: block;">
+                            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+                            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+                            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+                            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+                            <path fill="none" d="M0 0h48v48H0z"></path>
+                        </svg>
+                    </div>
+                    <span class="gsi-material-button-contents">Sign in with Google</span>
+                    <span style="display: none;">Sign in with Google</span>
+                </div>
+            </button>
         </div>
+
     </section>
 
     <section id="quiz-view" class="view card" aria-labelledby="quiz-title">
@@ -51,6 +112,8 @@
             <span class="result-question-label">問題：</span>
             <p id="result-question-text" class="result-question-text"></p>
         </div>
+
+        <div id="result-options-container" class="result-options-container" aria-label="選択肢"></div>
 
         <p id="explanation-text" class="explanation-box"></p>
         <img id="explanation-image" class="content-image hidden" src="" alt="解説画像">
@@ -71,6 +134,24 @@
 
         <button type="button" class="btn-secondary btn-stop-quiz" data-action="stop-quiz">学習を中断する</button>
     </section>
+
+    <button type="button" class="settings-toggle" id="settings-toggle" aria-controls="settings-drawer" aria-expanded="false" aria-label="設定を開く">
+        <img src="images/setting.png" alt="">
+    </button>
+
+    <div class="settings-overlay hidden" id="settings-overlay"></div>
+    <aside class="settings-drawer" id="settings-drawer" aria-label="設定メニュー" aria-hidden="true">
+        <div class="settings-drawer-header">
+            <h2 class="settings-drawer-title">設定</h2>
+            <button type="button" class="settings-close-button" id="settings-close-button" aria-label="設定を閉じる">×</button>
+        </div>
+
+        <label for="csv-upload" class="settings-menu-item">
+            <span class="settings-menu-title">＋ 問題CSVを追加・更新</span>
+            <span class="settings-menu-description">CSVファイルを選択して問題を追加する</span>
+        </label>
+        <input type="file" id="csv-upload" accept=".csv" class="visually-hidden">
+    </aside>
 </div>
 </body>
 </html>
