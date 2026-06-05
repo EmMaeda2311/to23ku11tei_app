@@ -869,15 +869,15 @@ async function processSM2(quality, { stopAfter = false } = {}) {
     appState.selectedOptions = [];
     appState.selectedQuality = null;
 
-    await persistAppData();
-
     if (stopAfter) {
+        await persistAppData();
         appState.queues.current = [];
         updateDashboard();
         showView('dashboard-view');
         return;
     }
 
+    persistAppData();
     renderNextQuestion();
 }
 
