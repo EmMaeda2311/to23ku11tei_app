@@ -72,6 +72,7 @@ function cacheElements() {
         settingsOverlay: document.getElementById('settings-overlay'),
         settingsDrawer: document.getElementById('settings-drawer'),
         settingsCloseButton: document.getElementById('settings-close-button'),
+        savingOverlay: document.getElementById('saving-overlay'),
         csvUpload: document.getElementById('csv-upload'),
         questionText: document.getElementById('question-text'),
         questionImage: document.getElementById('question-image'),
@@ -231,6 +232,14 @@ function closeSettingsDrawer() {
             elements.settingsOverlay.classList.add('hidden');
         }
     }, 220);
+}
+
+function showSavingOverlay() {
+    elements.savingOverlay.classList.remove('hidden');
+}
+
+function hideSavingOverlay() {
+    elements.savingOverlay.classList.add('hidden');
 }
 
 function bindSettingsSwipe() {
@@ -870,11 +879,17 @@ async function processSM2(quality, { stopAfter = false } = {}) {
     appState.selectedQuality = null;
 
     if (stopAfter) {
-        await persistAppData();
-        appState.queues.current = [];
-        updateDashboard();
-        showView('dashboard-view');
-        return;
+        showSavingOverlay();
+
+        try {
+            await persistAppData();
+            appState.queues.current = [];
+            updateDashboard();
+            showView('dashboard-view');
+            return;
+        } finally {
+            hideSavingOverlay();
+        }
     }
 
     persistAppData();

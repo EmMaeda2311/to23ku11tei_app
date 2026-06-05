@@ -642,6 +642,57 @@ button:disabled {
     line-height: 1.45;
 }
 
+.saving-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.78);
+}
+
+.saving-overlay.hidden {
+    display: none;
+}
+
+.saving-indicator {
+    display: flex;
+    min-width: 132px;
+    min-height: 132px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--text-color);
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(68, 68, 68, 0.16);
+}
+
+.saving-indicator p {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+}
+
+.saving-spinner {
+    width: 42px;
+    height: 42px;
+    border: 5px solid rgba(68, 68, 68, 0.12);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: saving-spin 0.82s linear infinite;
+}
+
+@keyframes saving-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 .question-text {
     font-size: 1.2em;
     font-weight: bold;
