@@ -24,6 +24,7 @@ const appState = {
     },
     currentQuestion: null,
     selectedOptions: [],
+    selectedQuality: null,
     google: {
         tokenClient: null,
         accessToken: null,
@@ -81,6 +82,8 @@ function cacheElements() {
         explanationText: document.getElementById('explanation-text'),
         explanationImage: document.getElementById('explanation-image'),
         correctActions: document.getElementById('correct-actions'),
+        continueAfterEvaluationButton: document.getElementById('continue-after-evaluation'),
+        stopAfterEvaluationButton: document.getElementById('stop-after-evaluation'),
         wrongActions: document.getElementById('wrong-actions'),
     });
 }
@@ -88,7 +91,13 @@ function cacheElements() {
 function bindEvents() {
     document.querySelector('[data-action="start-normal"]').addEventListener('click', () => startQuiz('normal'));
     document.querySelector('[data-action="start-wrong"]').addEventListener('click', () => startQuiz('wrong'));
-    document.querySelector('[data-action="stop-quiz"]').addEventListener('click', stopQuiz);
+    document.querySelectorAll('[data-action="stop-quiz"]').forEach((button) => {
+        button.addEventListener('click', stopQuiz);
+    });
+    document.querySelector('[data-action="continue-after-evaluation"]').addEventListener('click', () => processSelectedQuality(false));
+    document.querySelector('[data-action="stop-after-evaluation"]').addEventListener('click', () => processSelectedQuality(true));
+    document.querySelector('[data-action="continue-wrong"]').addEventListener('click', () => processSM2(0));
+    document.querySelector('[data-action="stop-wrong"]').addEventListener('click', () => processSM2(0, { stopAfter: true }));
     elements.brandMenuToggle.addEventListener('click', toggleLearningModeMenu);
     elements.googleAuthButton.addEventListener('click', () => requestGoogleAccess({ prompt: appState.google.accessToken ? '' : 'consent' }));
     elements.settingsToggle.addEventListener('click', openSettingsDrawer);
@@ -99,7 +108,7 @@ function bindEvents() {
     elements.csvUpload.addEventListener('change', handleCSVUpload);
 
     document.querySelectorAll('[data-quality]').forEach((button) => {
-        button.addEventListener('click', () => processSM2(Number(button.dataset.quality)));
+        button.addEventListener('click', () => selectQuality(Number(button.dataset.quality)));
     });
 }
 
@@ -658,6 +667,7 @@ function stopQuiz() {
     appState.queues.current = [];
     appState.currentQuestion = null;
     appState.selectedOptions = [];
+    appState.selectedQuality = null;
     updateDashboard();
     showView('dashboard-view');
 }
@@ -671,6 +681,7 @@ function renderNextQuestion() {
 
     appState.currentQuestion = appState.queues.current[0];
     appState.selectedOptions = [];
+    appState.selectedQuality = null;
 
     renderQuestionText(appState.currentQuestion);
     renderImage(elements.questionImage, appState.currentQuestion.questionImage);
@@ -793,6 +804,10 @@ function renderResultOptions(question) {
 function renderActionArea(isCorrect) {
     elements.correctActions.classList.toggle('hidden', !isCorrect);
     elements.wrongActions.classList.toggle('hidden', isCorrect);
+
+    if (isCorrect) {
+        resetQualitySelection();
+    }
 }
 
 function updateIntervalPreviewButtons(question) {
@@ -805,7 +820,38 @@ function updateIntervalPreviewButtons(question) {
     });
 }
 
-function processSM2(quality) {
+function selectQuality(quality) {
+    appState.selectedQuality = quality;
+
+    document.querySelectorAll('#correct-actions [data-quality]').forEach((button) => {
+        button.classList.toggle('is-selected', Number(button.dataset.quality) === quality);
+    });
+
+    elements.continueAfterEvaluationButton.disabled = false;
+    elements.stopAfterEvaluationButton.disabled = false;
+}
+
+function resetQualitySelection() {
+    appState.selectedQuality = null;
+
+    document.querySelectorAll('#correct-actions [data-quality]').forEach((button) => {
+        button.classList.remove('is-selected');
+    });
+
+    elements.continueAfterEvaluationButton.disabled = true;
+    elements.stopAfterEvaluationButton.disabled = true;
+}
+
+async function processSelectedQuality(stopAfter) {
+    if (appState.selectedQuality === null) {
+        alert('難易度を選択してください。');
+        return;
+    }
+
+    await processSM2(appState.selectedQuality, { stopAfter });
+}
+
+async function processSM2(quality, { stopAfter = false } = {}) {
     const question = appState.currentQuestion;
     if (!question) return;
 
@@ -819,8 +865,19 @@ function processSM2(quality) {
 
     question.nextReviewDate = Date.now() + nextIntervalDays * 24 * 60 * 60 * 1000;
     appState.queues.current.shift();
+    appState.currentQuestion = null;
+    appState.selectedOptions = [];
+    appState.selectedQuality = null;
 
-    persistAppData();
+    await persistAppData();
+
+    if (stopAfter) {
+        appState.queues.current = [];
+        updateDashboard();
+        showView('dashboard-view');
+        return;
+    }
+
     renderNextQuestion();
 }
 
