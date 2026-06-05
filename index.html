@@ -103,6 +103,7 @@
         <p id="question-text" class="question-text"></p>
         <img id="question-image" class="content-image hidden" src="" alt="問題画像">
         <div id="options-container" class="options-container"></div>
+        <button type="button" class="btn-secondary btn-stop-quiz" data-action="stop-quiz">学習を中断する</button>
     </section>
 
     <section id="result-view" class="view card" aria-labelledby="result-title">
@@ -125,14 +126,17 @@
                 <button type="button" class="btn-eval eval-good" data-quality="4">普通<br><small id="btn-interval-4"></small></button>
                 <button type="button" class="btn-eval eval-easy" data-quality="5">簡単<br><small id="btn-interval-5"></small></button>
             </div>
+            <div class="result-control-buttons">
+                <button type="button" class="btn-primary" id="continue-after-evaluation" data-action="continue-after-evaluation" disabled>次へ進む</button>
+                <button type="button" class="btn-secondary" id="stop-after-evaluation" data-action="stop-after-evaluation" disabled>問題を評価して、学習を中断</button>
+            </div>
         </div>
 
         <div id="wrong-actions" class="wrong-actions hidden">
             <p class="evaluation-title text-danger">※この問題は「要注意（間違えた問題）リスト」に追加されます</p>
-            <button type="button" class="btn-danger" data-quality="0">解説を読んで、次へ進む</button>
+            <button type="button" class="btn-danger" data-action="continue-wrong">解説を読んで、次へ進む</button>
+            <button type="button" class="btn-secondary" data-action="stop-wrong">間違えた問題として保存して中断</button>
         </div>
-
-        <button type="button" class="btn-secondary btn-stop-quiz" data-action="stop-quiz">学習を中断する</button>
     </section>
 
     <button type="button" class="settings-toggle" id="settings-toggle" aria-controls="settings-drawer" aria-expanded="false" aria-label="設定を開く">
