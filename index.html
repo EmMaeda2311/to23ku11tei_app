@@ -28,6 +28,18 @@
                 <img src="images/wrong_quiz.webp" alt="" class="learning-mode-image">
                 <span class="learning-mode-label">間違いを復習</span>
             </button>
+            <button type="button" class="learning-mode-card learning-mode-card-wide" id="unit-menu-toggle" aria-controls="unit-mode-menu" aria-expanded="false">
+                <img src="images/today_quiz.webp" alt="" class="learning-mode-image">
+                <span class="learning-mode-label">単元ごとに学習</span>
+            </button>
+            <div id="unit-mode-menu" class="unit-mode-menu" aria-label="単元選択">
+                <button type="button" class="unit-mode-card" data-unit="臨床病態生理学">臨床病態生理学</button>
+                <button type="button" class="unit-mode-card" data-unit="フィジカルアセスメント">フィジカルアセスメント</button>
+                <button type="button" class="unit-mode-card" data-unit="臨床薬理学">臨床薬理学</button>
+                <button type="button" class="unit-mode-card" data-unit="臨床推論">臨床推論</button>
+                <button type="button" class="unit-mode-card" data-unit="疾病・臨床病態概論">疾病・臨床病態概論</button>
+                <button type="button" class="unit-mode-card" data-unit="医療安全・特定行為実践">医療安全・特定行為実践</button>
+            </div>
         </div>
 
         <div class="stats" aria-label="学習状況">
@@ -69,6 +81,8 @@
                     <span><i class="legend-dot legend-good"></i>普通</span>
                     <span><i class="legend-dot legend-easy"></i>簡単</span>
                 </div>
+                <button type="button" class="understanding-detail-toggle" id="understanding-detail-toggle" aria-controls="unit-understanding-details" aria-expanded="false">詳細</button>
+                <div id="unit-understanding-details" class="unit-understanding-details hidden" aria-label="単元ごとの理解率"></div>
             </div>
 
             <div class="dashboard-counts">
@@ -99,7 +113,11 @@
     </section>
 
     <section id="quiz-view" class="view card" aria-labelledby="quiz-title">
-        <h2 id="quiz-title">問題</h2>
+        <div class="quiz-heading">
+            <h2 id="quiz-title">問題</h2>
+            <span id="question-unit" class="question-unit hidden"></span>
+            <span id="question-id" class="question-id"></span>
+        </div>
         <p id="question-text" class="question-text"></p>
         <img id="question-image" class="content-image hidden" src="" alt="問題画像">
         <div id="options-container" class="options-container"></div>
