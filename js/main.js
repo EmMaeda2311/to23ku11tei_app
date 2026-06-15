@@ -80,6 +80,7 @@ function cacheElements() {
         csvUpload: document.getElementById('csv-upload'),
         questionUnit: document.getElementById('question-unit'),
         questionId: document.getElementById('question-id'),
+        questionReviewStatus: document.getElementById('question-review-status'),
         questionText: document.getElementById('question-text'),
         questionImage: document.getElementById('question-image'),
         optionsContainer: document.getElementById('options-container'),
@@ -850,6 +851,7 @@ function renderNextQuestion() {
     renderQuestionText(appState.currentQuestion);
     renderQuestionUnit(appState.currentQuestion);
     renderQuestionId(appState.currentQuestion);
+    renderQuestionReviewStatus(appState.currentQuestion);
     renderImage(elements.questionImage, appState.currentQuestion.questionImage);
     renderOptions(appState.currentQuestion.options);
     showView('quiz-view');
@@ -869,6 +871,37 @@ function renderQuestionUnit(question) {
 
 function renderQuestionId(question) {
     elements.questionId.textContent = question.id ? `ID: ${question.id}` : '';
+}
+
+function renderQuestionReviewStatus(question) {
+    const isFirstAttempt = question.nextReviewDate === null;
+    elements.questionReviewStatus.textContent = isFirstAttempt ? '初出題' : '再出題';
+    elements.questionReviewStatus.classList.remove('is-quality-wrong', 'is-quality-hard', 'is-quality-good', 'is-quality-easy');
+    elements.questionReviewStatus.classList.toggle('is-first-attempt', isFirstAttempt);
+    elements.questionReviewStatus.classList.toggle('is-review-attempt', !isFirstAttempt);
+
+    if (!isFirstAttempt) {
+        elements.questionReviewStatus.classList.add(getQualityClass(question.lastQuality));
+    }
+}
+
+function getQualityClass(quality) {
+    switch (quality) {
+        case 0:
+        case '0':
+            return 'is-quality-wrong';
+        case 3:
+        case '3':
+            return 'is-quality-hard';
+        case 4:
+        case '4':
+            return 'is-quality-good';
+        case 5:
+        case '5':
+            return 'is-quality-easy';
+        default:
+            return '';
+    }
 }
 
 function renderImage(imageElement, imagePath) {
