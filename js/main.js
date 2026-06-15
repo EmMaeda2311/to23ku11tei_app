@@ -63,8 +63,12 @@ function cacheElements() {
         understandingGoodSegment: document.getElementById('understanding-good-segment'),
         understandingEasySegment: document.getElementById('understanding-easy-segment'),
         understandingUnknownSegment: document.getElementById('understanding-unknown-segment'),
+        understandingDetailToggle: document.getElementById('understanding-detail-toggle'),
+        unitUnderstandingDetails: document.getElementById('unit-understanding-details'),
         brandMenuToggle: document.getElementById('brand-menu-toggle'),
         learningModeMenu: document.getElementById('learning-mode-menu'),
+        unitMenuToggle: document.getElementById('unit-menu-toggle'),
+        unitModeMenu: document.getElementById('unit-mode-menu'),
         googleAuthButton: document.getElementById('google-auth-button'),
         googleAuthButtonContents: document.querySelector('#google-auth-button .gsi-material-button-contents'),
         googleSyncStatus: document.getElementById('google-sync-status'),
@@ -74,6 +78,8 @@ function cacheElements() {
         settingsCloseButton: document.getElementById('settings-close-button'),
         savingOverlay: document.getElementById('saving-overlay'),
         csvUpload: document.getElementById('csv-upload'),
+        questionUnit: document.getElementById('question-unit'),
+        questionId: document.getElementById('question-id'),
         questionText: document.getElementById('question-text'),
         questionImage: document.getElementById('question-image'),
         optionsContainer: document.getElementById('options-container'),
@@ -92,6 +98,10 @@ function cacheElements() {
 function bindEvents() {
     document.querySelector('[data-action="start-normal"]').addEventListener('click', () => startQuiz('normal'));
     document.querySelector('[data-action="start-wrong"]').addEventListener('click', () => startQuiz('wrong'));
+    document.querySelectorAll('[data-unit]').forEach((button) => {
+        button.addEventListener('click', () => startQuizByUnit(button.dataset.unit));
+    });
+    elements.unitMenuToggle.addEventListener('click', toggleUnitModeMenu);
     document.querySelectorAll('[data-action="stop-quiz"]').forEach((button) => {
         button.addEventListener('click', stopQuiz);
     });
@@ -100,6 +110,7 @@ function bindEvents() {
     document.querySelector('[data-action="continue-wrong"]').addEventListener('click', () => processSM2(0));
     document.querySelector('[data-action="stop-wrong"]').addEventListener('click', () => processSM2(0, { stopAfter: true }));
     elements.brandMenuToggle.addEventListener('click', toggleLearningModeMenu);
+    elements.understandingDetailToggle.addEventListener('click', toggleUnderstandingDetails);
     elements.googleAuthButton.addEventListener('click', () => requestGoogleAccess({ prompt: appState.google.accessToken ? '' : 'consent' }));
     elements.settingsToggle.addEventListener('click', openSettingsDrawer);
     elements.settingsOverlay.addEventListener('click', closeSettingsDrawer);
@@ -211,6 +222,16 @@ function setGoogleAuthButtonText(text) {
 function toggleLearningModeMenu() {
     const isOpen = elements.learningModeMenu.classList.toggle('is-open');
     elements.brandMenuToggle.setAttribute('aria-expanded', String(isOpen));
+}
+
+function toggleUnitModeMenu() {
+    const isOpen = elements.unitModeMenu.classList.toggle('is-open');
+    elements.unitMenuToggle.setAttribute('aria-expanded', String(isOpen));
+}
+
+function toggleUnderstandingDetails() {
+    const isOpen = elements.unitUnderstandingDetails.classList.toggle('hidden') === false;
+    elements.understandingDetailToggle.setAttribute('aria-expanded', String(isOpen));
 }
 
 function openSettingsDrawer() {
@@ -448,6 +469,7 @@ function normalizeAppData(data) {
         questions: data.questions.map((question) => ({
             ...DEFAULT_LEARNING_STATE,
             ...question,
+            unit: typeof question.unit === 'string' ? question.unit.trim() : '',
             correctAnswers: Array.isArray(question.correctAnswers) ? question.correctAnswers : [],
             options: Array.isArray(question.options) ? question.options : [],
         })),
@@ -488,12 +510,16 @@ function handleCSVUpload(event) {
 
 function importCSVAndMerge(csvText) {
     const rows = parseCSV(csvText);
+    const headers = rows[0] ?? [];
     const dataRows = rows.slice(1);
+    const unitIndex = findCSVColumnIndex(headers, ['unit', '単元']);
     let addedCount = 0;
     let updatedCount = 0;
 
     dataRows.forEach((columns) => {
-        const question = createQuestionFromCSVRow(columns);
+        const question = createQuestionFromCSVRow(columns, {
+            unitIndex,
+        });
         if (!question) return;
 
         const existingQuestion = appState.data.questions.find((item) => item.id === question.id);
@@ -531,7 +557,12 @@ function splitCSVLine(line) {
         .map((column) => column.replace(/^"(.*)"$/, '$1').replace(/""/g, '"').trim());
 }
 
-function createQuestionFromCSVRow(columns) {
+function findCSVColumnIndex(headers, names) {
+    const index = headers.findIndex((header) => names.includes(header.trim()));
+    return index >= 0 ? index : 12;
+}
+
+function createQuestionFromCSVRow(columns, { unitIndex = 12 } = {}) {
     const id = columns[0]?.trim();
     const correctIndexText = columns[2] ?? '';
     if (!id || !correctIndexText) return null;
@@ -545,8 +576,9 @@ function createQuestionFromCSVRow(columns) {
         .map((index) => rawOptions[index - 1])
         .filter(Boolean)
         .map(cleanOptionText);
+    const unit = columns[unitIndex]?.trim();
 
-    return {
+    const question = {
         id,
         question: cleanQuestionText(columns[1] ?? ''),
         correctAnswers,
@@ -555,6 +587,12 @@ function createQuestionFromCSVRow(columns) {
         questionImage: columns[10] || null,
         explanationImage: columns[11] || null,
     };
+
+    if (unit) {
+        question.unit = unit;
+    }
+
+    return question;
 }
 
 function cleanQuestionText(text) {
@@ -588,7 +626,7 @@ function updateDashboard() {
     const understandingCounts = countUnderstandingLevels(attemptedQuestions);
 
     appState.queues.wrongDue = questions.filter(isWrongQuestion);
-    appState.queues.normalDue = questions.filter((question) => isNormalDueQuestion(question, now));
+    appState.queues.normalDue = buildTodayLearningQueue(questions, now);
 
     elements.statAttempted.textContent = `${attempted} / ${total}`;
     elements.attemptedRateBar.style.width = `${calculatePercentage(attempted, total)}%`;
@@ -596,6 +634,7 @@ function updateDashboard() {
     elements.statWrong.textContent = `${appState.queues.wrongDue.length} / ${attempted}`;
     elements.warningRateBar.style.width = `${calculatePercentage(appState.queues.wrongDue.length, attempted)}%`;
     updateUnderstandingBar(understandingCounts, attempted);
+    renderUnitUnderstandingDetails(questions);
 }
 
 function isAttemptedQuestion(question) {
@@ -608,17 +647,21 @@ function isWrongQuestion(question) {
 
 function countUnderstandingLevels(questions) {
     return questions.reduce((counts, question) => {
-        switch (Number(question.lastQuality)) {
+        switch (question.lastQuality) {
             case 0:
+            case '0':
                 counts.wrong += 1;
                 break;
             case 3:
+            case '3':
                 counts.hard += 1;
                 break;
             case 4:
+            case '4':
                 counts.good += 1;
                 break;
             case 5:
+            case '5':
                 counts.easy += 1;
                 break;
             default:
@@ -646,13 +689,111 @@ function updateUnderstandingBar(counts, attempted) {
     elements.understandingSummary.textContent = attempted > 0 ? `評価済み ${evaluated} / ${attempted}` : '未着手';
 }
 
+function renderUnitUnderstandingDetails(questions) {
+    const groupedQuestions = groupQuestionsByUnit(questions);
+    elements.unitUnderstandingDetails.innerHTML = '';
+
+    if (groupedQuestions.length === 0) {
+        elements.unitUnderstandingDetails.textContent = '単元情報がありません。';
+        return;
+    }
+
+    groupedQuestions.forEach(([unitName, unitQuestions]) => {
+        const counts = countUnderstandingLevels(unitQuestions);
+        const total = unitQuestions.length;
+        const attempted = unitQuestions.filter(isAttemptedQuestion).length;
+        const detail = document.createElement('div');
+        detail.className = 'unit-understanding-item';
+        detail.innerHTML = `
+            <div class="unit-understanding-header">
+                <strong>${escapeHTML(unitName)}</strong>
+                <span>${attempted} / ${total}</span>
+            </div>
+            <div class="understanding-bar" aria-hidden="true">
+                <div class="understanding-segment understanding-wrong" style="width: ${calculatePercentage(counts.wrong, total)}%"></div>
+                <div class="understanding-segment understanding-hard" style="width: ${calculatePercentage(counts.hard, total)}%"></div>
+                <div class="understanding-segment understanding-good" style="width: ${calculatePercentage(counts.good, total)}%"></div>
+                <div class="understanding-segment understanding-easy" style="width: ${calculatePercentage(counts.easy, total)}%"></div>
+                <div class="understanding-segment understanding-unknown" style="width: ${calculatePercentage(counts.unknown, total)}%"></div>
+            </div>
+        `;
+        elements.unitUnderstandingDetails.appendChild(detail);
+    });
+}
+
+function groupQuestionsByUnit(questions) {
+    const groups = new Map();
+
+    questions.forEach((question) => {
+        const unitName = question.unit?.trim();
+        if (!unitName) return;
+
+        if (!groups.has(unitName)) {
+            groups.set(unitName, []);
+        }
+
+        groups.get(unitName).push(question);
+    });
+
+    return Array.from(groups.entries()).sort(([unitA], [unitB]) => unitA.localeCompare(unitB, 'ja'));
+}
+
 function calculatePercentage(numerator, denominator) {
     if (denominator <= 0) return 0;
     return Math.min(100, Math.max(0, (numerator / denominator) * 100));
 }
 
 function isNormalDueQuestion(question, now) {
-    return question.nextReviewDate === null || (question.nextReviewDate <= now && question.repetitionCount > 0);
+    return question.nextReviewDate === null || question.nextReviewDate <= now;
+}
+
+function buildTodayLearningQueue(questions, now) {
+    const unansweredQuestions = shuffleArray(questions.filter(isUnansweredQuestion));
+    const reviewQuestions = shuffleArray(questions.filter((question) => isReviewDueQuestion(question, now)));
+    const wrongReviewQuestions = shuffleArray(questions.filter((question) => isWrongReviewDueQuestion(question, now)));
+
+    return interleaveLearningQueues({
+        unansweredQuestions,
+        reviewQuestions,
+        wrongReviewQuestions,
+    });
+}
+
+function buildTodayLearningQueueByUnit(unitName, now) {
+    const targetQuestions = appState.data.questions.filter((question) => question.unit === unitName);
+    return buildTodayLearningQueue(targetQuestions, now);
+}
+
+function isUnansweredQuestion(question) {
+    return question.nextReviewDate === null;
+}
+
+function isReviewDueQuestion(question, now) {
+    return question.nextReviewDate !== null
+        && question.nextReviewDate <= now
+        && !isWrongQuestion(question);
+}
+
+function isWrongReviewDueQuestion(question, now) {
+    return isWrongQuestion(question) && question.nextReviewDate <= now;
+}
+
+function interleaveLearningQueues({ unansweredQuestions, reviewQuestions, wrongReviewQuestions }) {
+    const queue = [];
+
+    while (unansweredQuestions.length > 0 || reviewQuestions.length > 0 || wrongReviewQuestions.length > 0) {
+        pushNextQuestion(queue, unansweredQuestions);
+        pushNextQuestion(queue, reviewQuestions);
+        pushNextQuestion(queue, unansweredQuestions);
+        pushNextQuestion(queue, wrongReviewQuestions);
+    }
+
+    return queue;
+}
+
+function pushNextQuestion(queue, source) {
+    if (source.length === 0) return;
+    queue.push(source.shift());
 }
 
 function startQuiz(mode) {
@@ -668,7 +809,21 @@ function startQuiz(mode) {
         return;
     }
 
-    appState.queues.current = shuffleArray(queue);
+    appState.queues.current = mode === 'wrong' ? shuffleArray(queue) : [...queue];
+    renderNextQuestion();
+}
+
+function startQuizByUnit(unitName) {
+    updateDashboard();
+
+    const queue = buildTodayLearningQueueByUnit(unitName, Date.now());
+
+    if (queue.length === 0) {
+        alert(`${unitName}の今日の学習タスクは完了しています。`);
+        return;
+    }
+
+    appState.queues.current = queue;
     renderNextQuestion();
 }
 
@@ -693,6 +848,8 @@ function renderNextQuestion() {
     appState.selectedQuality = null;
 
     renderQuestionText(appState.currentQuestion);
+    renderQuestionUnit(appState.currentQuestion);
+    renderQuestionId(appState.currentQuestion);
     renderImage(elements.questionImage, appState.currentQuestion.questionImage);
     renderOptions(appState.currentQuestion.options);
     showView('quiz-view');
@@ -702,6 +859,16 @@ function renderQuestionText(question) {
     const requiredCount = question.correctAnswers.length;
     const helperText = requiredCount > 1 ? `\n（※ ${requiredCount}つ選んでください）` : '';
     elements.questionText.textContent = `${question.question}${helperText}`;
+}
+
+function renderQuestionUnit(question) {
+    const unit = question.unit?.trim();
+    elements.questionUnit.textContent = unit || '';
+    elements.questionUnit.classList.toggle('hidden', !unit);
+}
+
+function renderQuestionId(question) {
+    elements.questionId.textContent = question.id ? `ID: ${question.id}` : '';
 }
 
 function renderImage(imageElement, imagePath) {
