@@ -813,7 +813,8 @@ button:disabled {
 }
 
 .question-unit,
-.question-id {
+.question-id,
+.question-review-status {
     display: inline-flex;
     align-items: center;
     min-height: 30px;
@@ -830,6 +831,32 @@ button:disabled {
 .question-id {
     color: var(--sub-text-color);
     background: var(--surface-color);
+}
+
+.question-review-status.is-first-attempt {
+    color: var(--sub-text-color);
+    background: var(--surface-color);
+    border-color: var(--border-color);
+}
+
+.question-review-status.is-quality-wrong {
+    background: rgba(244, 172, 146, 0.3);
+    border-color: var(--danger-color);
+}
+
+.question-review-status.is-quality-hard {
+    background: rgba(254, 213, 43, 0.3);
+    border-color: var(--accent-yellow-color);
+}
+
+.question-review-status.is-quality-good {
+    background: var(--primary-soft-color);
+    border-color: var(--primary-color);
+}
+
+.question-review-status.is-quality-easy {
+    background: rgba(159, 203, 155, 0.3);
+    border-color: var(--understanding-easy-color);
 }
 
 .options-container button {
