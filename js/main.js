@@ -85,6 +85,7 @@ function cacheElements() {
         questionImage: document.getElementById('question-image'),
         optionsContainer: document.getElementById('options-container'),
         resultTitle: document.getElementById('result-title'),
+        resultQuestionId: document.getElementById('result-question-id'),
         resultQuestionText: document.getElementById('result-question-text'),
         resultOptionsContainer: document.getElementById('result-options-container'),
         explanationText: document.getElementById('explanation-text'),
@@ -972,6 +973,8 @@ function renderResultHeader(isCorrect) {
 }
 
 function renderResultBody(question, isCorrect) {
+    elements.resultQuestionId.textContent = question.id ? `ID: ${question.id}` : '';
+
     if (isCorrect) {
         elements.resultQuestionText.textContent = question.question;
     } else {

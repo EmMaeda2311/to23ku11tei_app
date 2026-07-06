@@ -892,6 +892,13 @@ button:disabled {
     border-radius: 4px;
 }
 
+.result-question-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
 #result-title {
     display: flex;
     align-items: center;
