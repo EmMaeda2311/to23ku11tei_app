@@ -40,6 +40,18 @@
                 <button type="button" class="unit-mode-card" data-unit="疾病・臨床病態概論">疾病・臨床病態概論</button>
                 <button type="button" class="unit-mode-card" data-unit="医療安全・特定行為実践">医療安全・特定行為実践</button>
             </div>
+            <button type="button" class="learning-mode-card learning-mode-card-wide" id="test-menu-toggle" aria-controls="test-mode-menu" aria-expanded="false">
+                <img src="images/today_quiz.webp" alt="" class="learning-mode-image">
+                <span class="learning-mode-label">テストモード</span>
+            </button>
+            <div id="test-mode-menu" class="unit-mode-menu" aria-label="テスト単元選択">
+                <button type="button" class="unit-mode-card" data-test-unit="臨床病態生理学">臨床病態生理学</button>
+                <button type="button" class="unit-mode-card" data-test-unit="フィジカルアセスメント">フィジカルアセスメント</button>
+                <button type="button" class="unit-mode-card" data-test-unit="臨床薬理学">臨床薬理学</button>
+                <button type="button" class="unit-mode-card" data-test-unit="臨床推論">臨床推論</button>
+                <button type="button" class="unit-mode-card" data-test-unit="疾病・臨床病態概論">疾病・臨床病態概論</button>
+                <button type="button" class="unit-mode-card" data-test-unit="医療安全・特定行為実践">医療安全・特定行為実践</button>
+            </div>
         </div>
 
         <div class="stats" aria-label="学習状況">
@@ -118,10 +130,12 @@
             <span id="question-unit" class="question-unit hidden"></span>
             <span id="question-id" class="question-id"></span>
             <span id="question-review-status" class="question-review-status"></span>
+            <span id="test-progress" class="test-progress hidden"></span>
         </div>
         <p id="question-text" class="question-text"></p>
         <img id="question-image" class="content-image hidden" src="" alt="問題画像">
         <div id="options-container" class="options-container"></div>
+        <button type="button" class="btn-primary hidden" id="test-next-button" disabled>次へ</button>
         <button type="button" class="btn-secondary btn-stop-quiz" data-action="stop-quiz">学習を中断する</button>
     </section>
 
@@ -159,6 +173,17 @@
             <button type="button" class="btn-danger" data-action="continue-wrong">解説を読んで、次へ進む</button>
             <button type="button" class="btn-secondary" data-action="stop-wrong">間違えた問題として保存して中断</button>
         </div>
+    </section>
+
+    <section id="test-result-view" class="view card" aria-labelledby="test-result-title">
+        <h2 id="test-result-title">テスト結果</h2>
+        <p id="test-score" class="test-score">0 / 50</p>
+        <p id="test-result-summary" class="test-result-summary"></p>
+
+        <div id="test-wrong-results" class="test-result-list" aria-label="間違えた問題"></div>
+        <button type="button" class="btn-secondary" id="show-all-test-results">すべての結果を表示</button>
+        <div id="test-all-results" class="test-result-list hidden" aria-label="すべての結果"></div>
+        <button type="button" class="btn-primary" id="back-to-dashboard-from-test">ダッシュボードへ戻る</button>
     </section>
 
     <button type="button" class="settings-toggle" id="settings-toggle" aria-controls="settings-drawer" aria-expanded="false" aria-label="設定を開く">

@@ -7,6 +7,7 @@ const GOOGLE_DRIVE_APPDATA_SCOPE = 'https://www.googleapis.com/auth/drive.appdat
 const GOOGLE_DRIVE_DATA_FILE_NAME = 'quiz-app-data.json';
 const GOOGLE_DRIVE_UPLOAD_ENDPOINT = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime';
 const GOOGLE_DRIVE_FILES_ENDPOINT = 'https://www.googleapis.com/drive/v3/files';
+const TEST_QUESTION_COUNT = 50;
 const DEFAULT_LEARNING_STATE = Object.freeze({
     repetitionCount: 0,
     easeFactor: 2.5,
@@ -25,12 +26,21 @@ const appState = {
     currentQuestion: null,
     selectedOptions: [],
     selectedQuality: null,
+    test: {
+        isActive: false,
+        unit: null,
+        questions: [],
+        currentIndex: 0,
+        results: [],
+    },
     google: {
         tokenClient: null,
         accessToken: null,
         dataFileId: null,
         dataFileModifiedTime: null,
         isConnected: false,
+        saveQueue: Promise.resolve(),
+        pendingSaveCount: 0,
     },
 };
 
@@ -52,6 +62,7 @@ function cacheElements() {
         dashboardView: document.getElementById('dashboard-view'),
         quizView: document.getElementById('quiz-view'),
         resultView: document.getElementById('result-view'),
+        testResultView: document.getElementById('test-result-view'),
         statAttempted: document.getElementById('stat-attempted'),
         attemptedRateBar: document.getElementById('attempted-rate-bar'),
         statDue: document.getElementById('stat-due'),
@@ -69,6 +80,8 @@ function cacheElements() {
         learningModeMenu: document.getElementById('learning-mode-menu'),
         unitMenuToggle: document.getElementById('unit-menu-toggle'),
         unitModeMenu: document.getElementById('unit-mode-menu'),
+        testMenuToggle: document.getElementById('test-menu-toggle'),
+        testModeMenu: document.getElementById('test-mode-menu'),
         googleAuthButton: document.getElementById('google-auth-button'),
         googleAuthButtonContents: document.querySelector('#google-auth-button .gsi-material-button-contents'),
         googleSyncStatus: document.getElementById('google-sync-status'),
@@ -81,9 +94,11 @@ function cacheElements() {
         questionUnit: document.getElementById('question-unit'),
         questionId: document.getElementById('question-id'),
         questionReviewStatus: document.getElementById('question-review-status'),
+        testProgress: document.getElementById('test-progress'),
         questionText: document.getElementById('question-text'),
         questionImage: document.getElementById('question-image'),
         optionsContainer: document.getElementById('options-container'),
+        testNextButton: document.getElementById('test-next-button'),
         resultTitle: document.getElementById('result-title'),
         resultQuestionId: document.getElementById('result-question-id'),
         resultQuestionText: document.getElementById('result-question-text'),
@@ -94,6 +109,12 @@ function cacheElements() {
         continueAfterEvaluationButton: document.getElementById('continue-after-evaluation'),
         stopAfterEvaluationButton: document.getElementById('stop-after-evaluation'),
         wrongActions: document.getElementById('wrong-actions'),
+        testScore: document.getElementById('test-score'),
+        testResultSummary: document.getElementById('test-result-summary'),
+        testWrongResults: document.getElementById('test-wrong-results'),
+        showAllTestResultsButton: document.getElementById('show-all-test-results'),
+        testAllResults: document.getElementById('test-all-results'),
+        backToDashboardFromTestButton: document.getElementById('back-to-dashboard-from-test'),
     });
 }
 
@@ -103,10 +124,17 @@ function bindEvents() {
     document.querySelectorAll('[data-unit]').forEach((button) => {
         button.addEventListener('click', () => startQuizByUnit(button.dataset.unit));
     });
+    document.querySelectorAll('[data-test-unit]').forEach((button) => {
+        button.addEventListener('click', () => startTestByUnit(button.dataset.testUnit));
+    });
     elements.unitMenuToggle.addEventListener('click', toggleUnitModeMenu);
+    elements.testMenuToggle.addEventListener('click', toggleTestModeMenu);
     document.querySelectorAll('[data-action="stop-quiz"]').forEach((button) => {
         button.addEventListener('click', stopQuiz);
     });
+    elements.testNextButton.addEventListener('click', processTestAnswer);
+    elements.showAllTestResultsButton.addEventListener('click', showAllTestResults);
+    elements.backToDashboardFromTestButton.addEventListener('click', stopQuiz);
     document.querySelector('[data-action="continue-after-evaluation"]').addEventListener('click', () => processSelectedQuality(false));
     document.querySelector('[data-action="stop-after-evaluation"]').addEventListener('click', () => processSelectedQuality(true));
     document.querySelector('[data-action="continue-wrong"]').addEventListener('click', () => processSM2(0));
@@ -120,6 +148,7 @@ function bindEvents() {
     bindSettingsSwipe();
 
     elements.csvUpload.addEventListener('change', handleCSVUpload);
+    window.addEventListener('beforeunload', handleBeforeUnload);
 
     document.querySelectorAll('[data-quality]').forEach((button) => {
         button.addEventListener('click', () => selectQuality(Number(button.dataset.quality)));
@@ -229,6 +258,11 @@ function toggleLearningModeMenu() {
 function toggleUnitModeMenu() {
     const isOpen = elements.unitModeMenu.classList.toggle('is-open');
     elements.unitMenuToggle.setAttribute('aria-expanded', String(isOpen));
+}
+
+function toggleTestModeMenu() {
+    const isOpen = elements.testModeMenu.classList.toggle('is-open');
+    elements.testMenuToggle.setAttribute('aria-expanded', String(isOpen));
 }
 
 function toggleUnderstandingDetails() {
@@ -487,12 +521,34 @@ async function persistAppData() {
 
     if (!appState.google.isConnected) return;
 
-    try {
-        await saveAppDataToDrive();
-    } catch (error) {
-        console.error('Google Driveへのデータ保存に失敗しました。', error);
-        setGoogleAuthStatus(`Google Driveへの保存に失敗しました: ${error.message}`);
-    }
+    return queueGoogleDriveSave();
+}
+
+function queueGoogleDriveSave() {
+    appState.google.pendingSaveCount += 1;
+    appState.google.saveQueue = appState.google.saveQueue
+        .catch(() => {})
+        .then(async () => {
+            setGoogleAuthStatus('Google Driveへ保存中...');
+            try {
+                await saveAppDataToDrive();
+            } catch (error) {
+                console.error('Google Driveへのデータ保存に失敗しました。', error);
+                setGoogleAuthStatus(`Google Driveへの保存に失敗しました: ${error.message}`);
+            }
+        })
+        .finally(() => {
+            appState.google.pendingSaveCount = Math.max(0, appState.google.pendingSaveCount - 1);
+        });
+
+    return appState.google.saveQueue;
+}
+
+function handleBeforeUnload(event) {
+    if (appState.google.pendingSaveCount === 0) return;
+
+    event.preventDefault();
+    event.returnValue = '';
 }
 
 function handleCSVUpload(event) {
@@ -829,17 +885,77 @@ function startQuizByUnit(unitName) {
     renderNextQuestion();
 }
 
+function startTestByUnit(unitName) {
+    const targetQuestions = appState.data.questions.filter((question) => question.unit === unitName);
+    const testQuestions = shuffleArray(targetQuestions).slice(0, TEST_QUESTION_COUNT);
+
+    if (testQuestions.length === 0) {
+        alert(`${unitName}のテスト問題がありません。`);
+        return;
+    }
+
+    appState.test = {
+        isActive: true,
+        unit: unitName,
+        questions: testQuestions,
+        currentIndex: 0,
+        results: [],
+    };
+    appState.queues.current = [...testQuestions];
+    renderNextQuestion();
+}
+
 function stopQuiz() {
+    if (appState.test.isActive) {
+        stopTest();
+        return;
+    }
+
     appState.queues.current = [];
     appState.currentQuestion = null;
     appState.selectedOptions = [];
     appState.selectedQuality = null;
+    resetTestState();
     updateDashboard();
     showView('dashboard-view');
 }
 
+function stopTest() {
+    appState.queues.current = [];
+    appState.currentQuestion = null;
+    appState.selectedOptions = [];
+    elements.testNextButton.classList.add('hidden');
+    elements.testNextButton.disabled = true;
+
+    if (appState.test.results.length > 0) {
+        renderTestResult();
+        return;
+    }
+
+    resetTestState();
+    updateDashboard();
+    showView('dashboard-view');
+}
+
+function resetTestState() {
+    appState.test = {
+        isActive: false,
+        unit: null,
+        questions: [],
+        currentIndex: 0,
+        results: [],
+    };
+    elements.testNextButton.classList.add('hidden');
+    elements.testNextButton.disabled = true;
+}
+
 function renderNextQuestion() {
     if (appState.queues.current.length === 0) {
+        if (appState.test.isActive) {
+            renderTestResult();
+            return;
+        }
+
         updateDashboard();
         showView('dashboard-view');
         return;
@@ -853,8 +969,10 @@ function renderNextQuestion() {
     renderQuestionUnit(appState.currentQuestion);
     renderQuestionId(appState.currentQuestion);
     renderQuestionReviewStatus(appState.currentQuestion);
+    renderTestProgress();
     renderImage(elements.questionImage, appState.currentQuestion.questionImage);
     renderOptions(appState.currentQuestion.options);
+    renderTestControls();
     showView('quiz-view');
 }
 
@@ -922,6 +1040,23 @@ function renderOptions(options) {
     });
 }
 
+function renderTestControls() {
+    elements.testNextButton.classList.toggle('hidden', !appState.test.isActive);
+    elements.testNextButton.disabled = true;
+    elements.testNextButton.textContent = appState.test.currentIndex + 1 >= appState.test.questions.length ? '結果を見る' : '次へ';
+}
+
+function renderTestProgress() {
+    elements.testProgress.classList.toggle('hidden', !appState.test.isActive);
+
+    if (!appState.test.isActive) {
+        elements.testProgress.textContent = '';
+        return;
+    }
+
+    elements.testProgress.textContent = `${appState.test.currentIndex + 1} / ${appState.test.questions.length}`;
+}
+
 function handleOptionClick(button, option) {
     const requiredCount = appState.currentQuestion.correctAnswers.length;
 
@@ -929,14 +1064,114 @@ function handleOptionClick(button, option) {
         appState.selectedOptions = appState.selectedOptions.filter((selectedOption) => selectedOption !== option);
         button.classList.remove('selected');
     } else {
+        if (appState.test.isActive && appState.selectedOptions.length >= requiredCount) return;
+
         appState.selectedOptions.push(option);
         button.classList.add('selected');
+    }
+
+    if (appState.test.isActive) {
+        elements.testNextButton.disabled = appState.selectedOptions.length !== requiredCount;
+        return;
     }
 
     if (appState.selectedOptions.length === requiredCount) {
         lockOptionButtons();
         setTimeout(() => checkAnswer(), 300);
     }
+}
+
+function processTestAnswer() {
+    const question = appState.currentQuestion;
+    if (!appState.test.isActive || !question) return;
+
+    const selectedOptions = [...appState.selectedOptions];
+    const isCorrect = areSameAnswers(selectedOptions, question.correctAnswers);
+
+    appState.test.results.push({
+        questionId: question.id,
+        question: question.question,
+        correctAnswers: [...question.correctAnswers],
+        selectedOptions,
+        isCorrect,
+    });
+    appState.test.currentIndex += 1;
+    appState.queues.current.shift();
+    appState.currentQuestion = null;
+    appState.selectedOptions = [];
+    renderNextQuestion();
+}
+
+function renderTestResult() {
+    const results = appState.test.results;
+    const correctCount = results.filter((result) => result.isCorrect).length;
+    const wrongResults = results.filter((result) => !result.isCorrect);
+
+    elements.testScore.textContent = `${correctCount} / ${results.length}`;
+    elements.testResultSummary.textContent = `${appState.test.unit}：間違えた問題 ${wrongResults.length}問`;
+    renderTestResultList(elements.testWrongResults, wrongResults, '間違えた問題はありません。');
+    renderTestResultList(elements.testAllResults, results, '結果がありません。');
+    elements.testAllResults.classList.add('hidden');
+    elements.showAllTestResultsButton.classList.toggle('hidden', wrongResults.length === results.length);
+    elements.showAllTestResultsButton.textContent = 'すべての結果を表示';
+    showView('test-result-view');
+}
+
+function renderTestResultList(container, results, emptyMessage) {
+    container.innerHTML = '';
+
+    if (results.length === 0) {
+        const emptyElement = document.createElement('p');
+        emptyElement.className = 'test-result-empty';
+        emptyElement.textContent = emptyMessage;
+        container.appendChild(emptyElement);
+        return;
+    }
+
+    const table = document.createElement('div');
+    table.className = 'test-result-table';
+    table.innerHTML = `
+        <div class="test-result-row test-result-row-head">
+            <span>判定</span>
+            <span>問題文</span>
+            <span>正解</span>
+            <span>あなたの回答</span>
+        </div>
+    `;
+
+    results.forEach((result) => {
+        table.appendChild(createTestResultRow(result));
+    });
+
+    container.appendChild(table);
+}
+
+function createTestResultRow(result) {
+    const row = document.createElement('div');
+    row.className = 'test-result-row';
+    row.innerHTML = `
+        <div class="test-result-mark-cell">${createTestResultMark(result.isCorrect)}</div>
+        <div class="test-result-question">${escapeHTML(result.question)}</div>
+        <div class="test-result-answers">${formatAnswerList(result.correctAnswers)}</div>
+        <div class="test-result-answers">${formatAnswerList(result.selectedOptions)}</div>
+    `;
+    return row;
+}
+
+function createTestResultMark(isCorrect) {
+    const className = isCorrect ? 'test-result-mark-correct' : 'test-result-mark-wrong';
+    const label = isCorrect ? '正解' : '不正解';
+    return `<span class="test-result-mark ${className}" aria-label="${label}"></span>`;
+}
+
+function formatAnswerList(answers) {
+    if (!answers || answers.length === 0) return '<span>未回答</span>';
+    return answers.map((answer) => `<span>・${escapeHTML(answer)}</span>`).join('');
+}
+
+function showAllTestResults() {
+    elements.testAllResults.classList.remove('hidden');
+    elements.showAllTestResultsButton.classList.add('hidden');
 }
 
 function lockOptionButtons() {
