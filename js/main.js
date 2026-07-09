@@ -98,6 +98,8 @@ function cacheElements() {
         questionText: document.getElementById('question-text'),
         questionImage: document.getElementById('question-image'),
         optionsContainer: document.getElementById('options-container'),
+        testNavigation: document.getElementById('test-navigation'),
+        testPrevButton: document.getElementById('test-prev-button'),
         testNextButton: document.getElementById('test-next-button'),
         resultTitle: document.getElementById('result-title'),
         resultQuestionId: document.getElementById('result-question-id'),
@@ -132,7 +134,8 @@ function bindEvents() {
     document.querySelectorAll('[data-action="stop-quiz"]').forEach((button) => {
         button.addEventListener('click', stopQuiz);
     });
-    elements.testNextButton.addEventListener('click', processTestAnswer);
+    elements.testPrevButton.addEventListener('click', goToPreviousTestQuestion);
+    elements.testNextButton.addEventListener('click', goToNextTestQuestion);
     elements.showAllTestResultsButton.addEventListener('click', showAllTestResults);
     elements.backToDashboardFromTestButton.addEventListener('click', returnToDashboardFromTest);
     document.querySelector('[data-action="continue-after-evaluation"]').addEventListener('click', () => processSelectedQuality(false));
@@ -899,9 +902,9 @@ function startTestByUnit(unitName) {
         unit: unitName,
         questions: testQuestions,
         currentIndex: 0,
-        results: [],
+        results: Array(testQuestions.length).fill(null),
     };
-    appState.queues.current = [...testQuestions];
+    appState.queues.current = [];
     renderNextQuestion();
 }
 
@@ -924,10 +927,11 @@ function stopTest() {
     appState.queues.current = [];
     appState.currentQuestion = null;
     appState.selectedOptions = [];
-    elements.testNextButton.classList.add('hidden');
+    elements.testNavigation.classList.add('hidden');
+    elements.testPrevButton.disabled = true;
     elements.testNextButton.disabled = true;
 
-    if (appState.test.results.length > 0) {
+    if (getAnsweredTestResults().length > 0) {
         renderTestResult();
         return;
     }
@@ -954,17 +958,18 @@ function resetTestState() {
         currentIndex: 0,
         results: [],
     };
-    elements.testNextButton.classList.add('hidden');
+    elements.testNavigation.classList.add('hidden');
+    elements.testPrevButton.disabled = true;
     elements.testNextButton.disabled = true;
 }
 
 function renderNextQuestion() {
-    if (appState.queues.current.length === 0) {
-        if (appState.test.isActive) {
-            renderTestResult();
-            return;
-        }
+    if (appState.test.isActive) {
+        renderCurrentTestQuestion();
+        return;
+    }
 
+    if (appState.queues.current.length === 0) {
         updateDashboard();
         showView('dashboard-view');
         return;
@@ -981,6 +986,29 @@ function renderNextQuestion() {
     renderTestProgress();
     renderImage(elements.questionImage, appState.currentQuestion.questionImage);
     renderOptions(appState.currentQuestion.options);
+    renderTestControls();
+    showView('quiz-view');
+}
+
+function renderCurrentTestQuestion() {
+    const question = appState.test.questions[appState.test.currentIndex];
+
+    if (!question) {
+        renderTestResult();
+        return;
+    }
+
+    appState.currentQuestion = question;
+    appState.selectedOptions = getSavedTestSelectedOptions(appState.test.currentIndex);
+    appState.selectedQuality = null;
+
+    renderQuestionText(question);
+    renderQuestionUnit(question);
+    renderQuestionId(question);
+    renderQuestionReviewStatus(question);
+    renderTestProgress();
+    renderImage(elements.questionImage, question.questionImage);
+    renderOptions(question.options);
     renderTestControls();
     showView('quiz-view');
 }
@@ -1044,14 +1072,16 @@ function renderOptions(options) {
         const button = document.createElement('button');
         button.type = 'button';
         button.textContent = option;
+        button.classList.toggle('selected', appState.selectedOptions.includes(option));
         button.addEventListener('click', () => handleOptionClick(button, option));
         elements.optionsContainer.appendChild(button);
     });
 }
 
 function renderTestControls() {
-    elements.testNextButton.classList.toggle('hidden', !appState.test.isActive);
-    elements.testNextButton.disabled = true;
+    elements.testNavigation.classList.toggle('hidden', !appState.test.isActive);
+    elements.testPrevButton.disabled = !appState.test.isActive || appState.test.currentIndex === 0;
+    elements.testNextButton.disabled = !appState.test.isActive || appState.selectedOptions.length !== appState.currentQuestion.correctAnswers.length;
     elements.testNextButton.textContent = appState.test.currentIndex + 1 >= appState.test.questions.length ? '結果を見る' : '次へ';
 }
 
@@ -1080,7 +1110,7 @@ function handleOptionClick(button, option) {
     }
 
     if (appState.test.isActive) {
-        elements.testNextButton.disabled = appState.selectedOptions.length !== requiredCount;
+        renderTestControls();
         return;
     }
 
@@ -1090,29 +1120,66 @@ function handleOptionClick(button, option) {
     }
 }
 
-function processTestAnswer() {
+function saveCurrentTestAnswer() {
     const question = appState.currentQuestion;
-    if (!appState.test.isActive || !question) return;
+    if (!appState.test.isActive || !question) return false;
 
     const selectedOptions = [...appState.selectedOptions];
     const isCorrect = areSameAnswers(selectedOptions, question.correctAnswers);
 
-    appState.test.results.push({
+    appState.test.results[appState.test.currentIndex] = {
         questionId: question.id,
         question: question.question,
         correctAnswers: [...question.correctAnswers],
         selectedOptions,
         isCorrect,
-    });
+    };
+
+    return true;
+}
+
+function goToPreviousTestQuestion() {
+    if (!appState.test.isActive || appState.test.currentIndex === 0) return;
+
+    saveCurrentTestAnswer();
+    appState.test.currentIndex -= 1;
+    appState.currentQuestion = null;
+    appState.selectedOptions = [];
+    renderNextQuestion();
+}
+
+function goToNextTestQuestion() {
+    if (!appState.test.isActive) return;
+
+    const requiredCount = appState.currentQuestion.correctAnswers.length;
+    if (appState.selectedOptions.length !== requiredCount) {
+        alert(`${requiredCount}つ選択してください。`);
+        return;
+    }
+
+    saveCurrentTestAnswer();
+
+    if (appState.test.currentIndex + 1 >= appState.test.questions.length) {
+        const firstUnansweredIndex = appState.test.results.findIndex((result) => !result);
+        if (firstUnansweredIndex >= 0) {
+            alert(`未回答の問題が${appState.test.results.filter((result) => !result).length}問あります。`);
+            appState.test.currentIndex = firstUnansweredIndex;
+            renderNextQuestion();
+            return;
+        }
+
+        renderTestResult();
+        return;
+    }
+
     appState.test.currentIndex += 1;
-    appState.queues.current.shift();
     appState.currentQuestion = null;
     appState.selectedOptions = [];
     renderNextQuestion();
 }
 
 function renderTestResult() {
-    const results = appState.test.results;
+    const results = getAnsweredTestResults();
     const correctCount = results.filter((result) => result.isCorrect).length;
     const wrongResults = results.filter((result) => !result.isCorrect);
 
@@ -1124,6 +1191,14 @@ function renderTestResult() {
     elements.showAllTestResultsButton.classList.toggle('hidden', wrongResults.length === results.length);
     elements.showAllTestResultsButton.textContent = 'すべての結果を表示';
     showView('test-result-view');
+}
+
+function getAnsweredTestResults() {
+    return appState.test.results.filter(Boolean);
+}
+
+function getSavedTestSelectedOptions(index) {
+    return appState.test.results[index]?.selectedOptions ? [...appState.test.results[index].selectedOptions] : [];
 }
 
 function renderTestResultList(container, results, emptyMessage) {

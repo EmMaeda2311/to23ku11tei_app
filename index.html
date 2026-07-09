@@ -135,7 +135,10 @@
         <p id="question-text" class="question-text"></p>
         <img id="question-image" class="content-image hidden" src="" alt="問題画像">
         <div id="options-container" class="options-container"></div>
-        <button type="button" class="btn-primary hidden" id="test-next-button" disabled>次へ</button>
+        <div id="test-navigation" class="test-navigation hidden">
+            <button type="button" class="btn-secondary" id="test-prev-button">前へ</button>
+            <button type="button" class="btn-primary" id="test-next-button" disabled>次へ</button>
+        </div>
         <button type="button" class="btn-secondary btn-stop-quiz" data-action="stop-quiz">学習を中断する</button>
     </section>
 

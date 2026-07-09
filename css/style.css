@@ -1097,6 +1097,21 @@ button:disabled {
     margin-top: 18px;
 }
 
+.test-navigation {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.test-navigation.hidden {
+    display: none;
+}
+
+.test-navigation button {
+    margin-top: 0;
+}
+
 .test-score {
     margin: 8px 0 4px;
     color: var(--text-color);
@@ -1221,6 +1236,10 @@ button:disabled {
     }
 
     .result-control-buttons {
+        grid-template-columns: 1fr;
+    }
+
+    .test-navigation {
         grid-template-columns: 1fr;
     }
 
