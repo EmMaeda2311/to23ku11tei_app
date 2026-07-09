@@ -134,7 +134,7 @@ function bindEvents() {
     });
     elements.testNextButton.addEventListener('click', processTestAnswer);
     elements.showAllTestResultsButton.addEventListener('click', showAllTestResults);
-    elements.backToDashboardFromTestButton.addEventListener('click', stopQuiz);
+    elements.backToDashboardFromTestButton.addEventListener('click', returnToDashboardFromTest);
     document.querySelector('[data-action="continue-after-evaluation"]').addEventListener('click', () => processSelectedQuality(false));
     document.querySelector('[data-action="stop-after-evaluation"]').addEventListener('click', () => processSelectedQuality(true));
     document.querySelector('[data-action="continue-wrong"]').addEventListener('click', () => processSM2(0));
@@ -932,6 +932,15 @@ function stopTest() {
         return;
     }
 
+    resetTestState();
+    updateDashboard();
+    showView('dashboard-view');
+}
+
+function returnToDashboardFromTest() {
+    appState.queues.current = [];
+    appState.currentQuestion = null;
+    appState.selectedOptions = [];
     resetTestState();
     updateDashboard();
     showView('dashboard-view');
