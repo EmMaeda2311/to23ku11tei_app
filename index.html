@@ -20,38 +20,34 @@
         </header>
 
         <div id="learning-mode-menu" class="learning-mode-menu" aria-label="学習モード">
-            <button type="button" class="learning-mode-card" data-action="start-normal">
+            <button type="button" class="learning-mode-card" id="common-subject-toggle" aria-controls="common-subject-menu" aria-expanded="false">
                 <img src="images/today_quiz.webp" alt="" class="learning-mode-image">
-                <span class="learning-mode-label">今日の学習</span>
+                <span class="learning-mode-label">共通科目</span>
             </button>
-            <button type="button" class="learning-mode-card" data-action="start-wrong">
+            <button type="button" class="learning-mode-card" id="division-subject-toggle" aria-controls="division-subject-menu" aria-expanded="false">
                 <img src="images/wrong_quiz.webp" alt="" class="learning-mode-image">
-                <span class="learning-mode-label">間違いを復習</span>
+                <span class="learning-mode-label">区分別科目</span>
             </button>
-            <button type="button" class="learning-mode-card learning-mode-card-wide" id="unit-menu-toggle" aria-controls="unit-mode-menu" aria-expanded="false">
-                <img src="images/today_quiz.webp" alt="" class="learning-mode-image">
-                <span class="learning-mode-label">単元ごとに学習</span>
-            </button>
-            <div id="unit-mode-menu" class="unit-mode-menu" aria-label="単元選択">
-                <button type="button" class="unit-mode-card" data-unit="臨床病態生理学">臨床病態生理学</button>
-                <button type="button" class="unit-mode-card" data-unit="フィジカルアセスメント">フィジカルアセスメント</button>
-                <button type="button" class="unit-mode-card" data-unit="臨床薬理学">臨床薬理学</button>
-                <button type="button" class="unit-mode-card" data-unit="臨床推論">臨床推論</button>
-                <button type="button" class="unit-mode-card" data-unit="疾病・臨床病態概論">疾病・臨床病態概論</button>
-                <button type="button" class="unit-mode-card" data-unit="医療安全・特定行為実践">医療安全・特定行為実践</button>
+
+            <div id="common-subject-menu" class="subject-mode-menu" aria-label="共通科目メニュー">
+                <button type="button" class="unit-mode-card" data-start-mode="normal" data-subject-group="common">今日の学習</button>
+                <button type="button" class="unit-mode-card" data-start-mode="wrong" data-subject-group="common">間違いを復習</button>
+                <button type="button" class="unit-mode-card" id="common-unit-menu-toggle" aria-controls="common-unit-mode-menu" aria-expanded="false">単元ごとに学習</button>
+                <div id="common-unit-mode-menu" class="unit-mode-menu" aria-label="共通科目の単元選択"></div>
             </div>
+
+            <div id="division-subject-menu" class="subject-mode-menu" aria-label="区分別科目メニュー">
+                <button type="button" class="unit-mode-card" data-start-mode="normal" data-subject-group="division">今日の学習</button>
+                <button type="button" class="unit-mode-card" data-start-mode="wrong" data-subject-group="division">間違いを復習</button>
+                <button type="button" class="unit-mode-card" id="division-unit-menu-toggle" aria-controls="division-unit-mode-menu" aria-expanded="false">単元ごとに学習</button>
+                <div id="division-unit-mode-menu" class="unit-mode-menu" aria-label="区分別科目の単元選択"></div>
+            </div>
+
             <button type="button" class="learning-mode-card learning-mode-card-wide" id="test-menu-toggle" aria-controls="test-mode-menu" aria-expanded="false">
                 <img src="images/today_quiz.webp" alt="" class="learning-mode-image">
                 <span class="learning-mode-label">テストモード</span>
             </button>
-            <div id="test-mode-menu" class="unit-mode-menu" aria-label="テスト単元選択">
-                <button type="button" class="unit-mode-card" data-test-unit="臨床病態生理学">臨床病態生理学</button>
-                <button type="button" class="unit-mode-card" data-test-unit="フィジカルアセスメント">フィジカルアセスメント</button>
-                <button type="button" class="unit-mode-card" data-test-unit="臨床薬理学">臨床薬理学</button>
-                <button type="button" class="unit-mode-card" data-test-unit="臨床推論">臨床推論</button>
-                <button type="button" class="unit-mode-card" data-test-unit="疾病・臨床病態概論">疾病・臨床病態概論</button>
-                <button type="button" class="unit-mode-card" data-test-unit="医療安全・特定行為実践">医療安全・特定行為実践</button>
-            </div>
+            <div id="test-mode-menu" class="unit-mode-menu" aria-label="テスト単元選択"></div>
         </div>
 
         <div class="stats" aria-label="学習状況">

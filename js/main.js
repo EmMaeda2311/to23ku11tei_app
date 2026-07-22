@@ -8,6 +8,7 @@ const GOOGLE_DRIVE_DATA_FILE_NAME = 'quiz-app-data.json';
 const GOOGLE_DRIVE_UPLOAD_ENDPOINT = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime';
 const GOOGLE_DRIVE_FILES_ENDPOINT = 'https://www.googleapis.com/drive/v3/files';
 const TEST_QUESTION_COUNT = 50;
+const COMMON_SUBJECT_MAX_ID = 965;
 const DEFAULT_LEARNING_STATE = Object.freeze({
     repetitionCount: 0,
     easeFactor: 2.5,
@@ -78,8 +79,14 @@ function cacheElements() {
         unitUnderstandingDetails: document.getElementById('unit-understanding-details'),
         brandMenuToggle: document.getElementById('brand-menu-toggle'),
         learningModeMenu: document.getElementById('learning-mode-menu'),
-        unitMenuToggle: document.getElementById('unit-menu-toggle'),
-        unitModeMenu: document.getElementById('unit-mode-menu'),
+        commonSubjectToggle: document.getElementById('common-subject-toggle'),
+        commonSubjectMenu: document.getElementById('common-subject-menu'),
+        commonUnitMenuToggle: document.getElementById('common-unit-menu-toggle'),
+        commonUnitModeMenu: document.getElementById('common-unit-mode-menu'),
+        divisionSubjectToggle: document.getElementById('division-subject-toggle'),
+        divisionSubjectMenu: document.getElementById('division-subject-menu'),
+        divisionUnitMenuToggle: document.getElementById('division-unit-menu-toggle'),
+        divisionUnitModeMenu: document.getElementById('division-unit-mode-menu'),
         testMenuToggle: document.getElementById('test-menu-toggle'),
         testModeMenu: document.getElementById('test-mode-menu'),
         googleAuthButton: document.getElementById('google-auth-button'),
@@ -121,15 +128,27 @@ function cacheElements() {
 }
 
 function bindEvents() {
-    document.querySelector('[data-action="start-normal"]').addEventListener('click', () => startQuiz('normal'));
-    document.querySelector('[data-action="start-wrong"]').addEventListener('click', () => startQuiz('wrong'));
-    document.querySelectorAll('[data-unit]').forEach((button) => {
-        button.addEventListener('click', () => startQuizByUnit(button.dataset.unit));
+    document.querySelectorAll('[data-start-mode]').forEach((button) => {
+        button.addEventListener('click', () => startQuiz(button.dataset.startMode, {
+            subjectGroup: button.dataset.subjectGroup,
+        }));
     });
-    document.querySelectorAll('[data-test-unit]').forEach((button) => {
-        button.addEventListener('click', () => startTestByUnit(button.dataset.testUnit));
-    });
-    elements.unitMenuToggle.addEventListener('click', toggleUnitModeMenu);
+    elements.commonSubjectToggle.addEventListener('click', () => toggleSubjectModeMenu(
+        elements.commonSubjectMenu,
+        elements.commonSubjectToggle,
+    ));
+    elements.divisionSubjectToggle.addEventListener('click', () => toggleSubjectModeMenu(
+        elements.divisionSubjectMenu,
+        elements.divisionSubjectToggle,
+    ));
+    elements.commonUnitMenuToggle.addEventListener('click', () => toggleUnitModeMenu(
+        elements.commonUnitModeMenu,
+        elements.commonUnitMenuToggle,
+    ));
+    elements.divisionUnitMenuToggle.addEventListener('click', () => toggleUnitModeMenu(
+        elements.divisionUnitModeMenu,
+        elements.divisionUnitMenuToggle,
+    ));
     elements.testMenuToggle.addEventListener('click', toggleTestModeMenu);
     document.querySelectorAll('[data-action="stop-quiz"]').forEach((button) => {
         button.addEventListener('click', stopQuiz);
@@ -258,9 +277,14 @@ function toggleLearningModeMenu() {
     elements.brandMenuToggle.setAttribute('aria-expanded', String(isOpen));
 }
 
-function toggleUnitModeMenu() {
-    const isOpen = elements.unitModeMenu.classList.toggle('is-open');
-    elements.unitMenuToggle.setAttribute('aria-expanded', String(isOpen));
+function toggleSubjectModeMenu(menuElement, toggleButton) {
+    const isOpen = menuElement.classList.toggle('is-open');
+    toggleButton.setAttribute('aria-expanded', String(isOpen));
+}
+
+function toggleUnitModeMenu(menuElement, toggleButton) {
+    const isOpen = menuElement.classList.toggle('is-open');
+    toggleButton.setAttribute('aria-expanded', String(isOpen));
 }
 
 function toggleTestModeMenu() {
@@ -696,6 +720,7 @@ function updateDashboard() {
     elements.warningRateBar.style.width = `${calculatePercentage(appState.queues.wrongDue.length, attempted)}%`;
     updateUnderstandingBar(understandingCounts, attempted);
     renderUnitUnderstandingDetails(questions);
+    renderLearningModeUnitMenus();
 }
 
 function isAttemptedQuestion(question) {
@@ -799,6 +824,129 @@ function groupQuestionsByUnit(questions) {
     return Array.from(groups.entries()).sort(([unitA], [unitB]) => unitA.localeCompare(unitB, 'ja'));
 }
 
+function renderLearningModeUnitMenus() {
+    const commonQuestions = getQuestionsBySubjectGroup('common');
+    const divisionQuestions = getQuestionsBySubjectGroup('division');
+    const divisionUnitNames = new Set(groupQuestionsByUnit(divisionQuestions).map(([unitName]) => unitName));
+    const commonTestQuestions = commonQuestions.filter((question) => !divisionUnitNames.has(question.unit));
+
+    renderUnitMenu(
+        elements.commonUnitModeMenu,
+        commonQuestions,
+        (unitName) => startQuizByUnit(unitName, { subjectGroup: 'common' }),
+        '共通科目の単元情報がありません。',
+    );
+    renderUnitMenu(
+        elements.divisionUnitModeMenu,
+        divisionQuestions,
+        (unitName) => startQuizByUnit(unitName, { subjectGroup: 'division' }),
+        '区分別科目の単元情報がありません。',
+        (unitName) => `区分別：${unitName}`,
+    );
+    renderTestModeUnitMenu(commonTestQuestions, divisionQuestions);
+}
+
+function renderTestModeUnitMenu(commonQuestions, divisionQuestions) {
+    elements.testModeMenu.innerHTML = '';
+    renderUnitMenu(
+        elements.testModeMenu,
+        commonQuestions,
+        (unitName) => startTestByUnit(unitName, { subjectGroup: 'common' }),
+        '',
+        (unitName) => unitName,
+        { append: true },
+    );
+    renderUnitMenu(
+        elements.testModeMenu,
+        divisionQuestions,
+        (unitName) => startTestByUnit(unitName, { subjectGroup: 'division' }),
+        '',
+        (unitName) => `区分別：${unitName}`,
+        { append: true },
+    );
+
+    if (elements.testModeMenu.children.length > 0) return;
+
+    const emptyElement = document.createElement('p');
+    emptyElement.className = 'unit-mode-empty';
+    emptyElement.textContent = 'テストできる単元情報がありません。';
+    elements.testModeMenu.appendChild(emptyElement);
+}
+
+function renderUnitMenu(
+    container,
+    questions,
+    onSelectUnit,
+    emptyMessage,
+    formatLabel = (unitName) => unitName,
+    { append = false } = {},
+) {
+    if (!append) {
+        container.innerHTML = '';
+    }
+
+    const groupedQuestions = groupQuestionsByUnit(questions);
+
+    if (groupedQuestions.length === 0) {
+        if (!emptyMessage) return;
+
+        const emptyElement = document.createElement('p');
+        emptyElement.className = 'unit-mode-empty';
+        emptyElement.textContent = emptyMessage;
+        container.appendChild(emptyElement);
+        return;
+    }
+
+    groupedQuestions.forEach(([unitName]) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'unit-mode-card';
+        button.textContent = formatLabel(unitName);
+        button.addEventListener('click', () => onSelectUnit(unitName));
+        container.appendChild(button);
+    });
+}
+
+function getQuestionsBySubjectGroup(subjectGroup = 'all') {
+    switch (subjectGroup) {
+        case 'common':
+            return appState.data.questions.filter(isCommonSubjectQuestion);
+        case 'division':
+            return appState.data.questions.filter(isDivisionSubjectQuestion);
+        default:
+            return appState.data.questions;
+    }
+}
+
+function isCommonSubjectQuestion(question) {
+    const numericId = getQuestionNumericId(question);
+    return numericId !== null && numericId <= COMMON_SUBJECT_MAX_ID;
+}
+
+function isDivisionSubjectQuestion(question) {
+    const numericId = getQuestionNumericId(question);
+    return numericId !== null && numericId > COMMON_SUBJECT_MAX_ID;
+}
+
+function getQuestionNumericId(question) {
+    const match = String(question.id ?? '').match(/\d+/);
+    if (!match) return null;
+
+    const numericId = Number.parseInt(match[0], 10);
+    return Number.isInteger(numericId) ? numericId : null;
+}
+
+function getSubjectGroupLabel(subjectGroup = 'all') {
+    switch (subjectGroup) {
+        case 'common':
+            return '共通科目';
+        case 'division':
+            return '区分別科目';
+        default:
+            return '全科目';
+    }
+}
+
 function calculatePercentage(numerator, denominator) {
     if (denominator <= 0) return 0;
     return Math.min(100, Math.max(0, (numerator / denominator) * 100));
@@ -820,8 +968,8 @@ function buildTodayLearningQueue(questions, now) {
     });
 }
 
-function buildTodayLearningQueueByUnit(unitName, now) {
-    const targetQuestions = appState.data.questions.filter((question) => question.unit === unitName);
+function buildTodayLearningQueueByUnit(unitName, now, questions = appState.data.questions) {
+    const targetQuestions = questions.filter((question) => question.unit === unitName);
     return buildTodayLearningQueue(targetQuestions, now);
 }
 
@@ -857,13 +1005,17 @@ function pushNextQuestion(queue, source) {
     queue.push(source.shift());
 }
 
-function startQuiz(mode) {
+function startQuiz(mode, { subjectGroup = 'all' } = {}) {
     updateDashboard();
 
-    const queue = mode === 'wrong' ? appState.queues.wrongDue : appState.queues.normalDue;
+    const targetQuestions = getQuestionsBySubjectGroup(subjectGroup);
+    const queue = mode === 'wrong'
+        ? targetQuestions.filter(isWrongQuestion)
+        : buildTodayLearningQueue(targetQuestions, Date.now());
+    const subjectLabel = getSubjectGroupLabel(subjectGroup);
     const emptyMessage = mode === 'wrong'
-        ? '現在、要注意（間違えた問題）リストは空です。'
-        : '今日の新規・復習タスクは完了しています。';
+        ? `${subjectLabel}の要注意（間違えた問題）リストは空です。`
+        : `${subjectLabel}の今日の新規・復習タスクは完了しています。`;
 
     if (queue.length === 0) {
         alert(emptyMessage);
@@ -874,10 +1026,14 @@ function startQuiz(mode) {
     renderNextQuestion();
 }
 
-function startQuizByUnit(unitName) {
+function startQuizByUnit(unitName, { subjectGroup = 'all' } = {}) {
     updateDashboard();
 
-    const queue = buildTodayLearningQueueByUnit(unitName, Date.now());
+    const queue = buildTodayLearningQueueByUnit(
+        unitName,
+        Date.now(),
+        getQuestionsBySubjectGroup(subjectGroup),
+    );
 
     if (queue.length === 0) {
         alert(`${unitName}の今日の学習タスクは完了しています。`);
@@ -888,8 +1044,8 @@ function startQuizByUnit(unitName) {
     renderNextQuestion();
 }
 
-function startTestByUnit(unitName) {
-    const targetQuestions = appState.data.questions.filter((question) => question.unit === unitName);
+function startTestByUnit(unitName, { subjectGroup = 'all' } = {}) {
+    const targetQuestions = getQuestionsBySubjectGroup(subjectGroup).filter((question) => question.unit === unitName);
     const testQuestions = shuffleArray(targetQuestions).slice(0, TEST_QUESTION_COUNT);
 
     if (testQuestions.length === 0) {
